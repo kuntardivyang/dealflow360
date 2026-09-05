@@ -9,6 +9,8 @@ import { overageBp } from "@/domain/money";
 import type { RiskPreview } from "@/lib/contract";
 import { prisma } from "@/lib/db";
 import { formatBp, formatDateTime, formatPoints } from "@/lib/format";
+import { loadRiskWeights, loadRoutingRules } from "@/services/quotation.service";
+import { previewRisk } from "@/services/risk-preview";
 
 export const dynamic = "force-dynamic";
 
@@ -23,7 +25,19 @@ export default async function QuotationDetailPage({ params }: { params: Promise<
     },
   });
   if (!q) notFound();
-  const risk = (q.riskBreakdown as unknown as RiskPreview | null) ?? null;
+  // Seeded quotations carry no stored breakdown until their first edit: compute it on the fly.
+  const stored = (q.riskBreakdown as unknown as RiskPreview | null) ?? null;
+  const risk =
+    stored ??
+    (q.lines.length > 0
+      ? previewRisk(
+          q.lines.map((l) => ({ lineId: l.id, effectiveDiscountBp: l.effectiveDiscountBp, ceilingBp: l.ceilingBp, gross: l.gross })),
+          q.marginBp,
+          q.total,
+          await loadRiskWeights(prisma),
+          await loadRoutingRules(prisma),
+        )
+      : null);
 
   type Line = (typeof q.lines)[number];
   const columns: Column<Line>[] = [
