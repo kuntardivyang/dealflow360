@@ -34,6 +34,9 @@ export const setOrderDiscountSchema = z.object({ quotationId: zId, version: zVer
 /** The single confirm action. Routing decides APPROVED vs PENDING_APPROVAL. */
 export const confirmQuotationSchema = z.object({ quotationId: zId, version: zVersion });
 
+/** REJECTED -> DRAFT for another round. */
+export const reviseQuotationSchema = z.object({ quotationId: zId, version: zVersion });
+
 export const sendToCustomerSchema = z.object({ quotationId: zId, version: zVersion });
 
 /** Rep answers a portal request (comment, change request or counter discount). */
@@ -50,5 +53,6 @@ export type UpdateLineInput = z.infer<typeof updateLineSchema>;
 export type RemoveLineInput = z.infer<typeof removeLineSchema>;
 export type SetOrderDiscountInput = z.infer<typeof setOrderDiscountSchema>;
 export type ConfirmQuotationInput = z.infer<typeof confirmQuotationSchema>;
+export type ReviseQuotationInput = z.infer<typeof reviseQuotationSchema>;
 export type SendToCustomerInput = z.infer<typeof sendToCustomerSchema>;
 export type RespondToRequestInput = z.infer<typeof respondToRequestSchema>;

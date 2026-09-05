@@ -10,7 +10,10 @@ import {
   actorFromUser,
   approverRoleSchema,
   type AddLineInput,
+  type ConfirmOutcome,
+  type ConfirmQuotationInput,
   type CreateQuotationInput,
+  type ReviseQuotationInput,
   type QuotationRef,
   type QuotationStatus,
   type QuotationTotalsView,
@@ -23,11 +26,11 @@ import {
 } from "@/lib/contract";
 import { prisma, type Tx } from "@/lib/db";
 import { publicId } from "@/lib/ids";
-import { previewRisk } from "./risk-preview";
-import { assertOwnerOrAdmin, assertStatus, lockQuotation, nextNumber, writeAudit } from "./support";
-
-// TODO(31): edits in APPROVED / SENT / UNDER_NEGOTIATION supersede the approval and return to DRAFT.
-const EDITABLE: readonly QuotationStatus[] = ["DRAFT"];
+import { scoreLines } from "@/domain/risk";
+import { riskPreview } from "@/domain/route";
+import { audit } from "@/lib/audit";
+import { EDIT_SUPERSEDES_APPROVAL, assertTransition } from "@/lib/state";
+import { assertOwnerOrAdmin, lockQuotation, nextNumber } from "./support";
 
 const toRef = (q: { id: number; publicId: string; number: string; status: QuotationStatus; version: number }): QuotationRef => ({
   id: q.id,
@@ -52,7 +55,7 @@ export async function createQuotation(input: CreateQuotationInput, user: Session
         notes: input.notes ?? null,
       },
     });
-    await writeAudit(tx, {
+    await audit(tx, {
       entityType: "Quotation",
       entityId: q.id,
       quotationId: q.id,
@@ -95,7 +98,7 @@ export async function addLine(input: AddLineInput, user: SessionUser): Promise<Q
         where: { id: existing.id },
         data: { qty: existing.qty + input.qty, ...(input.discountBp > 0 ? { discountBp: input.discountBp } : {}) },
       });
-      await writeAudit(tx, {
+      await audit(tx, {
         entityType: "QuotationLine",
         entityId: existing.id,
         quotationId: q.id,
@@ -124,7 +127,7 @@ export async function addLine(input: AddLineInput, user: SessionUser): Promise<Q
           sortOrder: count + 1,
         },
       });
-      await writeAudit(tx, {
+      await audit(tx, {
         entityType: "QuotationLine",
         entityId: line.id,
         quotationId: q.id,
@@ -148,7 +151,7 @@ export async function updateLine(input: UpdateLineInput, user: SessionUser): Pro
     };
     if (Object.keys(data).length === 0) throw new ValidationError("Nothing to change");
     const updated = await tx.quotationLine.update({ where: { id: line.id }, data });
-    await writeAudit(tx, {
+    await audit(tx, {
       entityType: "QuotationLine",
       entityId: line.id,
       quotationId: q.id,
@@ -167,7 +170,7 @@ export async function removeLine(input: RemoveLineInput, user: SessionUser): Pro
     const line = await tx.quotationLine.findFirst({ where: { id: input.lineId, quotationId: q.id } });
     if (!line) throw new NotFoundError("Line not found");
     await tx.quotationLine.delete({ where: { id: line.id } });
-    await writeAudit(tx, {
+    await audit(tx, {
       entityType: "QuotationLine",
       entityId: line.id,
       quotationId: q.id,
@@ -183,7 +186,7 @@ export async function setOrderDiscount(input: SetOrderDiscountInput, user: Sessi
   return prisma.$transaction(async (tx) => {
     const q = await loadForEdit(tx, input.quotationId, input.version, user);
     await tx.quotation.update({ where: { id: q.id }, data: { orderDiscountBp: input.orderDiscountBp } });
-    await writeAudit(tx, {
+    await audit(tx, {
       entityType: "Quotation",
       entityId: q.id,
       quotationId: q.id,
@@ -193,6 +196,86 @@ export async function setOrderDiscount(input: SetOrderDiscountInput, user: Sessi
       after: { orderDiscountBp: input.orderDiscountBp },
     });
     return recompute(tx, q.id);
+  });
+}
+
+/**
+ * The single confirm. Routing decides the destination: APPROVED when no rule fires,
+ * otherwise PENDING_APPROVAL with an ApprovalRequest and one step per approver role.
+ * The rep never asks for approval; the system does.
+ */
+export async function confirmQuotation(input: ConfirmQuotationInput, user: SessionUser): Promise<ConfirmOutcome> {
+  return prisma.$transaction(async (tx) => {
+    const q = await tx.quotation.findUnique({ where: { id: input.quotationId }, include: { lines: { select: { id: true } } } });
+    if (!q) throw new NotFoundError("Quotation not found");
+    assertOwnerOrAdmin(q, user);
+    assertTransition(q.status, "CONFIRM");
+    if (q.lines.length === 0) throw new ValidationError("Add at least one line before confirming");
+    await lockQuotation(tx, q.id, input.version);
+
+    const view = await recompute(tx, q.id);
+    const chain = view.risk.chain;
+    const actor = actorFromUser(user);
+
+    if (chain.length === 0) {
+      const approved = await tx.quotation.update({ where: { id: q.id }, data: { status: "APPROVED" } });
+      await audit(tx, {
+        entityType: "Quotation",
+        entityId: q.id,
+        quotationId: q.id,
+        action: "CONFIRM",
+        actor,
+        after: { status: "APPROVED", score: view.risk.score, chain: [] },
+      });
+      return { ...toRef(approved), chain: [], requestId: null };
+    }
+
+    // One request per approval round. A returned quotation re-confirms under a new version.
+    let approvalVersion = q.approvalVersion;
+    const clash = await tx.approvalRequest.findUnique({ where: { quotationId_version: { quotationId: q.id, version: approvalVersion } } });
+    if (clash) approvalVersion += 1;
+    const request = await tx.approvalRequest.create({
+      data: {
+        quotationId: q.id,
+        version: approvalVersion,
+        riskScore: view.risk.score,
+        riskBreakdown: JSON.parse(JSON.stringify(view.risk)) as Prisma.InputJsonValue,
+        chain: [...chain],
+        steps: { create: chain.map((role, i) => ({ stepNo: i + 1, requiredRole: role })) },
+      },
+    });
+    const pending = await tx.quotation.update({ where: { id: q.id }, data: { status: "PENDING_APPROVAL", approvalVersion } });
+    await audit(tx, {
+      entityType: "Quotation",
+      entityId: q.id,
+      quotationId: q.id,
+      action: "CONFIRM",
+      actor,
+      after: { status: "PENDING_APPROVAL", score: view.risk.score, chain, requestId: request.id, approvalVersion },
+    });
+    return { ...toRef(pending), chain, requestId: request.id };
+  });
+}
+
+/** A rejected quotation goes back to DRAFT for a new approval round. */
+export async function reviseQuotation(input: ReviseQuotationInput, user: SessionUser): Promise<QuotationRef> {
+  return prisma.$transaction(async (tx) => {
+    const q = await tx.quotation.findUnique({ where: { id: input.quotationId } });
+    if (!q) throw new NotFoundError("Quotation not found");
+    assertOwnerOrAdmin(q, user);
+    assertTransition(q.status, "REVISE");
+    await lockQuotation(tx, q.id, input.version);
+    const draft = await tx.quotation.update({ where: { id: q.id }, data: { status: "DRAFT", approvalVersion: { increment: 1 } } });
+    await audit(tx, {
+      entityType: "Quotation",
+      entityId: q.id,
+      quotationId: q.id,
+      action: "REVISE",
+      actor: actorFromUser(user),
+      before: { status: q.status, approvalVersion: q.approvalVersion },
+      after: { status: "DRAFT", approvalVersion: draft.approvalVersion },
+    });
+    return toRef(draft);
   });
 }
 
@@ -214,13 +297,12 @@ export async function recompute(tx: Tx, quotationId: number): Promise<QuotationT
   }
   const cfg = await loadRiskWeights(tx);
   const rules = await loadRoutingRules(tx);
-  const risk = previewRisk(
+  const scored = scoreLines(
     q.lines.map((l, i) => ({ lineId: l.id, effectiveDiscountBp: totals.lines[i].effectiveDiscountBp, ceilingBp: l.ceilingBp, gross: totals.lines[i].gross })),
     totals.marginBp,
-    totals.total,
     cfg,
-    rules,
   );
+  const risk = riskPreview(scored, totals.total, rules);
   const updated = await tx.quotation.update({
     where: { id: quotationId },
     data: {
@@ -242,9 +324,25 @@ async function loadForEdit(tx: Tx, id: number, version: number, user: SessionUse
   const q = await tx.quotation.findUnique({ where: { id }, include: { customer: { include: { tier: true } } } });
   if (!q) throw new NotFoundError("Quotation not found");
   assertOwnerOrAdmin(q, user);
-  assertStatus(q.status, EDITABLE, "edit");
+  assertTransition(q.status, "EDIT_LINES");
   await lockQuotation(tx, id, version);
-  return q;
+  if (!EDIT_SUPERSEDES_APPROVAL.includes(q.status)) return q;
+  // Editing an approved or sent quotation invalidates its approval: back to DRAFT, new approval round.
+  await tx.approvalRequest.updateMany({ where: { quotationId: id, status: "PENDING" }, data: { status: "SUPERSEDED", resolvedAt: new Date() } });
+  const back = await tx.quotation.update({
+    where: { id },
+    data: { status: "DRAFT", approvalVersion: { increment: 1 }, negotiationPending: false },
+  });
+  await audit(tx, {
+    entityType: "Quotation",
+    entityId: id,
+    quotationId: id,
+    action: "SUPERSEDE_APPROVAL",
+    actor: actorFromUser(user),
+    before: { status: q.status, approvalVersion: q.approvalVersion },
+    after: { status: back.status, approvalVersion: back.approvalVersion },
+  });
+  return { ...q, status: back.status, approvalVersion: back.approvalVersion };
 }
 
 /** Narrowest matching tier rule wins: product, then category, then tier wide. */
