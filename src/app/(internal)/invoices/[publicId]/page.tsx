@@ -207,8 +207,10 @@ export default async function InvoiceDetailPage({ params, searchParams }: { para
                   <span>
                     {formatDateTime(p.receivedAt)} · {p.method.toLowerCase().replaceAll("_", " ")}
                     {p.reference ? ` · ${p.reference}` : ""}
+                    {p.kind === "REFUND" ? <span className="ml-1.5 text-warning">refund</span> : null}
                   </span>
-                  <Money paise={p.amount} />
+                  {/* A refund is money going back out; render it negative so it cannot be read as a receipt. */}
+                  <Money paise={p.kind === "REFUND" ? -p.amount : p.amount} />
                 </div>
               ))}
             </CardContent>

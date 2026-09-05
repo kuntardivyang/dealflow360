@@ -5,7 +5,7 @@ import { ArrowUpRight, Plus } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { createQuotationAndOpen } from "@/app/(internal)/actions/quotation";
 import { formatDateTime } from "@/lib/format";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState, PageHeader, StatTile } from "@/components/shared";
 
