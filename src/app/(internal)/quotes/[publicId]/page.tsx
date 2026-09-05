@@ -170,7 +170,7 @@ export default async function QuotationDetailPage({
       </Link>
       <PageHeader
         title={q.customer ? `${q.number} · ${q.customer.name}` : `${q.number} · New quotation`}
-        description={`${q.customer ? `${q.customer.tier.name} tier (ceiling ${formatBp(q.customer.tier.discountCeilingBp)}) · ` : ""}Rep ${q.rep.name} · Last activity ${formatDateTime(q.lastActivityAt)}`}
+        description={`Rep ${q.rep.name} · Last activity ${formatDateTime(q.lastActivityAt)}`}
         actions={
           <>
             <StatusBadge status={q.status} className="h-6 px-3 text-sm" />
@@ -189,35 +189,6 @@ export default async function QuotationDetailPage({
       />
 
       {sp.error ? <p className="rounded-lg bg-destructive/8 px-3 py-2 text-sm text-destructive ring-1 ring-inset ring-destructive/20">{sp.error}</p> : null}
-
-      <div className="surface grid divide-y divide-border/80 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
-        <div className="px-5 py-3.5">
-          <p className="text-xs font-medium text-muted-foreground">Customer</p>
-          <p className="mt-1 text-sm">
-            {q.customer ? (
-              <>
-                <span className="font-heading text-base font-bold tracking-tight">{q.customer.name}</span>{" "}
-                <span className="text-muted-foreground">· {q.customer.tier.name} tier</span>
-              </>
-            ) : (
-              <span className="text-muted-foreground">No customer yet. Pick one in the form above.</span>
-            )}
-          </p>
-        </div>
-        <div className="px-5 py-3.5">
-          <p className="text-xs font-medium text-muted-foreground">Price List</p>
-          <p className="mt-1 text-sm">
-            {q.customer ? (
-              <>
-                <span className="font-heading text-base font-bold tracking-tight">{q.customer.tier.name} price list</span>{" "}
-                <span className="text-muted-foreground">· INR · discount ceiling {formatBp(q.customer.tier.discountCeilingBp)}</span>
-              </>
-            ) : (
-              <span className="text-muted-foreground">Set by the customer&apos;s tier.</span>
-            )}
-          </p>
-        </div>
-      </div>
 
       <CustomerField
         quotationId={q.id}

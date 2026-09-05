@@ -34,7 +34,10 @@ export default async function BillingDetailPage({ params, searchParams }: { para
   });
   if (!sub) notFound();
   const next = sub.schedule.find((s) => s.status === "SCHEDULED");
-  const perPeriod = sub.schedule[0]?.total ?? 0;
+  // The next unbilled period, not schedule[0]: period one is already INVOICED, and a
+  // quantity change reprices only SCHEDULED rows (subscription.service.ts:94), so
+  // reading schedule[0] would show the pre-change amount for ever.
+  const perPeriod = next?.total ?? sub.schedule.at(-1)?.total ?? 0;
 
   return (
     <div className="space-y-6">
