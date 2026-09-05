@@ -17,7 +17,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { label: "Product", href: "/admin/products", roles: BACKEND_ROLES },
 ];
 
-/** Tabs a user may see. `null` (no session yet) shows everything so the frame can be reviewed before auth lands. */
+/** Tabs a user may see. `null` (used only in tests and tooling) shows everything. */
 export function visibleNavItems(role: Role | null): NavItem[] {
   return NAV_ITEMS.filter((item) => !item.roles || role === null || item.roles.includes(role));
 }

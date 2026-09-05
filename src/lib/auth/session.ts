@@ -5,8 +5,9 @@ import { cookies } from "next/headers";
 import { prisma } from "@/lib/db";
 import type { SessionUser } from "@/lib/contract";
 
-export const SESSION_COOKIE = "df_session";
-export const SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+import { SESSION_COOKIE, SESSION_TTL_MS } from "./constants";
+
+export { SESSION_COOKIE, SESSION_TTL_MS };
 
 export async function getSessionUser(): Promise<SessionUser | null> {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
