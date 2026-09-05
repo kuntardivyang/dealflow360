@@ -22,6 +22,11 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  const invoices = await prisma.invoice.findMany({ where: { quotationId: { in: created } }, select: { id: true } });
+  await prisma.payment.deleteMany({ where: { invoiceId: { in: invoices.map((i) => i.id) } } });
+  await prisma.billingSchedule.deleteMany({ where: { subscription: { quotationId: { in: created } } } });
+  await prisma.invoice.deleteMany({ where: { quotationId: { in: created } } });
+  await prisma.subscription.deleteMany({ where: { quotationId: { in: created } } });
   await prisma.stockMove.deleteMany({ where: { quotationId: { in: created } } });
   await prisma.quotation.deleteMany({ where: { id: { in: created } } });
   for (const s of stockBefore) await prisma.stockLevel.update({ where: { id: s.id }, data: { onHand: s.onHand, reserved: s.reserved } });
@@ -89,7 +94,7 @@ describe("order path: confirm, split, reserve, ship", () => {
     await expect(fulfillment.ship({ shipmentId: main.id }, farhan)).rejects.toBeInstanceOf(ConflictError);
 
     const actions = (await prisma.auditLog.findMany({ where: { quotationId: ref.id }, orderBy: { id: "asc" } })).map((a) => a.action);
-    expect(actions).toEqual(["CREATE", "LINE_ADD", "LINE_ADD", "LINE_ADD", "CONFIRM", "SEND", "SPLIT_PROPOSED", "PORTAL_CONFIRM", "SPLIT_ACCEPTED", "SHIP"]);
+    expect(actions).toEqual(["CREATE", "LINE_ADD", "LINE_ADD", "LINE_ADD", "CONFIRM", "SEND", "INVOICES_CREATED", "SPLIT_PROPOSED", "PORTAL_CONFIRM", "SPLIT_ACCEPTED", "SHIP"]);
   });
 
   it("backorders what no warehouse has and rejects a stale accept when stock ran out", async () => {
