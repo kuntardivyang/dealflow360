@@ -1,134 +1,132 @@
-// Screen 3, Quotations list: one card or row per quotation, filter by stage, click to open.
+// Owner: A. Screen 3, Quotations list (feature 23): cards by default, table on request,
+// stage chips with counts, and + New Quotation which opens a fresh draft for a customer.
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { QUOTATION_STATUS_LABEL, QuotationStatus, type QuotationStatus as Status } from "@/lib/contract";
+import { DataTable, EmptyState, Money, PageHeader, StatusBadge, type Column } from "@/components/shared";
+import { QUOTATION_STATUS_LABEL, type QuotationStatus } from "@/lib/contract";
 import { prisma } from "@/lib/db";
-import { formatBp, formatDateTime, formatPaise } from "@/lib/format";
+import { formatBp, formatDateTime } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { createQuotationAndOpen } from "../actions/quotation";
-import { QuotationStatusBadge } from "./_components/status-badge";
 
+export const metadata = { title: "Quotations" };
 export const dynamic = "force-dynamic";
 
-const CHIPS: Status[] = ["DRAFT", "PENDING_APPROVAL", "APPROVED", "UNDER_NEGOTIATION", "CONFIRMED", "PAID"];
+const CHIPS: QuotationStatus[] = ["DRAFT", "PENDING_APPROVAL", "APPROVED", "UNDER_NEGOTIATION", "CONFIRMED"];
 
 type Search = { status?: string; view?: string; error?: string };
 
 export default async function QuotationsPage({ searchParams }: { searchParams: Promise<Search> }) {
   const sp = await searchParams;
-  const status = CHIPS.includes(sp.status as Status) ? (sp.status as Status) : undefined;
+  const filter = CHIPS.find((s) => s === sp.status);
   const table = sp.view === "table";
 
-  const [quotes, customers] = await Promise.all([
+  const [quotes, counts, customers] = await Promise.all([
     prisma.quotation.findMany({
-      where: status ? { status } : undefined,
-      include: { customer: true, rep: true },
+      where: filter ? { status: filter } : undefined,
+      include: { customer: { select: { name: true } }, rep: { select: { name: true } } },
       orderBy: { lastActivityAt: "desc" },
+      take: 200,
     }),
-    prisma.customer.findMany({ where: { archivedAt: null }, orderBy: { name: "asc" }, include: { tier: true } }),
+    prisma.quotation.groupBy({ by: ["status"], _count: { _all: true } }),
+    prisma.customer.findMany({ where: { archivedAt: null }, orderBy: { name: "asc" }, include: { tier: { select: { name: true } } } }),
   ]);
+  const total = counts.reduce((n, c) => n + c._count._all, 0);
+  const countOf = (s: QuotationStatus) => counts.find((c) => c.status === s)?._count._all ?? 0;
 
-  const href = (next: Partial<Search>) => {
+  const href = (next: { status?: QuotationStatus | null; view?: "table" | "cards" }) => {
     const p = new URLSearchParams();
-    const s = next.status === undefined ? status : next.status || undefined;
-    const v = next.view ?? (table ? "table" : undefined);
-    if (s) p.set("status", s);
-    if (v) p.set("view", v);
+    const status = next.status === undefined ? filter : next.status;
+    const view = next.view ?? (table ? "table" : "cards");
+    if (status) p.set("status", status);
+    if (view === "table") p.set("view", "table");
     const qs = p.toString();
     return qs ? `/quotes?${qs}` : "/quotes";
   };
 
+  const chip = (active: boolean) =>
+    cn(
+      "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition-colors",
+      active ? "border-primary bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:text-foreground",
+    );
+
+  type Row = (typeof quotes)[number];
+  const columns: Column<Row>[] = [
+    { key: "number", header: "Quotation", cell: (q) => <span className="font-medium">{q.number}</span> },
+    { key: "customer", header: "Customer", cell: (q) => q.customer.name },
+    { key: "rep", header: "Rep", cell: (q) => q.rep.name },
+    { key: "total", header: "Amount", align: "right", cell: (q) => <Money paise={q.total} /> },
+    { key: "margin", header: "Margin", align: "right", cell: (q) => <span className="tabular-nums">{formatBp(q.marginBp)}</span> },
+    { key: "status", header: "Stage", cell: (q) => <StatusBadge status={q.status} /> },
+    { key: "activity", header: "Last activity", cell: (q) => <span className="text-muted-foreground">{formatDateTime(q.lastActivityAt)}</span> },
+  ];
+
   return (
-    <main className="mx-auto max-w-6xl space-y-6 p-6">
-      <header className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Quotations</h1>
-          <p className="text-sm text-muted-foreground">Every quotation in the system, one per row. Click one to open it.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <form action={createQuotationAndOpen} className="flex items-center gap-2">
-            <select name="customerId" required className="h-9 rounded-md border bg-background px-2 text-sm" defaultValue="">
-              <option value="" disabled>
-                Customer…
-              </option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} ({c.tier.name})
+    <div className="space-y-6">
+      <PageHeader
+        title="Quotations"
+        description="Every quotation in the system, one per card. Click one to open it."
+        actions={
+          <>
+            <form action={createQuotationAndOpen} className="flex items-center gap-2">
+              <select name="customerId" required defaultValue="" className="h-9 rounded-md border bg-card px-2 text-sm" aria-label="Customer">
+                <option value="" disabled>
+                  Customer…
                 </option>
-              ))}
-            </select>
-            <Button type="submit">+ New Quotation</Button>
-          </form>
-          <Link href={href({ view: table ? "" : "table" })} className="text-sm underline-offset-4 hover:underline">
-            {table ? "Switch to Card View" : "Switch to Table View"}
-          </Link>
-        </div>
-      </header>
+                {customers.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.tier.name})
+                  </option>
+                ))}
+              </select>
+              <Button type="submit">
+                <Plus /> New Quotation
+              </Button>
+            </form>
+            <Link href={href({ view: table ? "cards" : "table" })} className={buttonVariants({ variant: "outline" })}>
+              {table ? "Switch to Card View" : "Switch to Table View"}
+            </Link>
+          </>
+        }
+      />
 
-      {sp.error ? <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{sp.error}</p> : null}
+      {sp.error ? <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{sp.error}</p> : null}
 
-      <nav className="flex flex-wrap gap-2" aria-label="Filter by stage">
-        <Chip active={!status} href={href({ status: "" })}>
-          All ({quotes.length})
-        </Chip>
+      <div className="flex flex-wrap gap-2" data-print-hide>
+        <Link href={href({ status: null })} className={chip(!filter)}>
+          All <span className="tabular-nums opacity-80">{total}</span>
+        </Link>
         {CHIPS.map((s) => (
-          <Chip key={s} active={status === s} href={href({ status: s })}>
-            {QUOTATION_STATUS_LABEL[s]}
-          </Chip>
+          <Link key={s} href={href({ status: s })} className={chip(filter === s)}>
+            {QUOTATION_STATUS_LABEL[s]} <span className="tabular-nums opacity-80">{countOf(s)}</span>
+          </Link>
         ))}
-      </nav>
+      </div>
 
       {quotes.length === 0 ? (
-        <p className="rounded-md border border-dashed p-8 text-center text-sm text-muted-foreground">No quotations here yet.</p>
+        <EmptyState
+          title={filter ? `No ${QUOTATION_STATUS_LABEL[filter].toLowerCase()} quotations` : "No quotations yet"}
+          description="Pick a customer and press New Quotation to start one."
+        />
       ) : table ? (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Number</TableHead>
-              <TableHead>Customer</TableHead>
-              <TableHead>Rep</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
-              <TableHead className="text-right">Margin</TableHead>
-              <TableHead>Stage</TableHead>
-              <TableHead>Last activity</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {quotes.map((q) => (
-              <TableRow key={q.id}>
-                <TableCell>
-                  <Link href={`/quotes/${q.publicId}`} className="font-medium hover:underline">
-                    {q.number}
-                  </Link>
-                </TableCell>
-                <TableCell>{q.customer.name}</TableCell>
-                <TableCell>{q.rep.name}</TableCell>
-                <TableCell className="text-right tabular-nums">{formatPaise(q.total)}</TableCell>
-                <TableCell className="text-right tabular-nums">{q.marginBp === null ? "n/a" : formatBp(q.marginBp)}</TableCell>
-                <TableCell>
-                  <QuotationStatusBadge status={q.status} />
-                </TableCell>
-                <TableCell className="text-muted-foreground">{formatDateTime(q.lastActivityAt)}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <DataTable columns={columns} rows={quotes} rowKey={(q) => q.id} rowHref={(q) => `/quotes/${q.publicId}`} />
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {quotes.map((q) => (
             <li key={q.id}>
-              <Link href={`/quotes/${q.publicId}`} className="block h-full">
+              <Link href={`/quotes/${q.publicId}`} className="block h-full rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring">
                 <Card className="h-full transition-colors hover:bg-muted/40">
                   <CardContent className="space-y-2 p-4">
                     <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <p className="font-medium leading-tight">{q.customer.name}</p>
+                      <div className="min-w-0">
+                        <p className="truncate font-medium leading-tight">{q.customer.name}</p>
                         <p className="text-xs text-muted-foreground">{q.number}</p>
                       </div>
-                      <QuotationStatusBadge status={q.status} />
+                      <StatusBadge status={q.status} />
                     </div>
-                    <p className="text-lg font-semibold tabular-nums">{formatPaise(q.total)}</p>
+                    <Money paise={q.total} className="block text-lg font-semibold" />
                     <p className="text-xs text-muted-foreground">
                       {q.rep.name} · {formatDateTime(q.lastActivityAt)}
                     </p>
@@ -139,20 +137,6 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
           ))}
         </ul>
       )}
-    </main>
+    </div>
   );
 }
-
-function Chip({ active, href, children }: { active: boolean; href: string; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${active ? "bg-foreground text-background" : "hover:bg-muted"}`}
-    >
-      {children}
-    </Link>
-  );
-}
-
-// Keep the enum import used so the runtime object stays available for future filters.
-void QuotationStatus;
