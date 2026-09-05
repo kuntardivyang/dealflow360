@@ -1,0 +1,275 @@
+// Owner: A. Every mutation runs in one transaction: optimistic lock, status guard,
+// the change, recompute of totals and risk, and an audit row.
+import { Prisma } from "@/generated/prisma/client";
+import { parseISODate } from "@/domain/dates";
+import { applyDiscount } from "@/domain/money";
+import { computeTotals } from "@/domain/totals";
+import {
+  NotFoundError,
+  ValidationError,
+  actorFromUser,
+  approverRoleSchema,
+  type AddLineInput,
+  type CreateQuotationInput,
+  type QuotationRef,
+  type QuotationStatus,
+  type QuotationTotalsView,
+  type RemoveLineInput,
+  type RiskWeights,
+  type RoutingRule,
+  type SessionUser,
+  type SetOrderDiscountInput,
+  type UpdateLineInput,
+} from "@/lib/contract";
+import { prisma, type Tx } from "@/lib/db";
+import { publicId } from "@/lib/ids";
+import { previewRisk } from "./risk-preview";
+import { assertOwnerOrAdmin, assertStatus, lockQuotation, nextNumber, writeAudit } from "./support";
+
+// TODO(31): edits in APPROVED / SENT / UNDER_NEGOTIATION supersede the approval and return to DRAFT.
+const EDITABLE: readonly QuotationStatus[] = ["DRAFT"];
+
+const toRef = (q: { id: number; publicId: string; number: string; status: QuotationStatus; version: number }): QuotationRef => ({
+  id: q.id,
+  publicId: q.publicId,
+  number: q.number,
+  status: q.status,
+  version: q.version,
+});
+
+export async function createQuotation(input: CreateQuotationInput, user: SessionUser): Promise<QuotationRef> {
+  return prisma.$transaction(async (tx) => {
+    const customer = await tx.customer.findFirst({ where: { id: input.customerId, archivedAt: null } });
+    if (!customer) throw new NotFoundError("Customer not found");
+    const number = await nextNumber(tx, "quotation", "Q");
+    const q = await tx.quotation.create({
+      data: {
+        publicId: publicId(),
+        number,
+        customerId: customer.id,
+        repUserId: user.id,
+        promisedDate: input.promisedDate ? parseISODate(input.promisedDate) : null,
+        notes: input.notes ?? null,
+      },
+    });
+    await writeAudit(tx, {
+      entityType: "Quotation",
+      entityId: q.id,
+      quotationId: q.id,
+      action: "CREATE",
+      actor: actorFromUser(user),
+      after: { number, customer: customer.name },
+    });
+    return toRef(q);
+  });
+}
+
+export async function addLine(input: AddLineInput, user: SessionUser): Promise<QuotationTotalsView> {
+  return prisma.$transaction(async (tx) => {
+    const q = await loadForEdit(tx, input.quotationId, input.version, user);
+    const product = await tx.product.findFirst({
+      where: { id: input.productId, archivedAt: null },
+      include: { category: true, plans: { where: { archivedAt: null }, orderBy: { id: "asc" } } },
+    });
+    if (!product) throw new NotFoundError("Product not found");
+
+    const isSubscription = product.kind === "SUBSCRIPTION";
+    let planId: number | null = null;
+    if (isSubscription) {
+      const plan = input.planId
+        ? await tx.recurringPlan.findFirst({ where: { id: input.planId, archivedAt: null } })
+        : (product.plans[0] ?? (await tx.recurringPlan.findFirst({ where: { archivedAt: null, productId: null }, orderBy: { id: "asc" } })));
+      if (!plan) throw new ValidationError("Pick a recurring plan for this subscription product", { planId: ["Required"] });
+      planId = plan.id;
+    }
+
+    const tier = q.customer.tier;
+    const rule = await bestPricelistRule(tx, tier.id, product.categoryId, product.id);
+    const unitPrice = rule ? applyDiscount(product.listPrice, rule.discountBp) : product.listPrice;
+    const ceilingBp =
+      product.category.discountCeilingBp === null ? tier.discountCeilingBp : Math.min(tier.discountCeilingBp, product.category.discountCeilingBp);
+
+    const existing = await tx.quotationLine.findFirst({ where: { quotationId: q.id, productId: product.id, planId } });
+    if (existing) {
+      const updated = await tx.quotationLine.update({
+        where: { id: existing.id },
+        data: { qty: existing.qty + input.qty, ...(input.discountBp > 0 ? { discountBp: input.discountBp } : {}) },
+      });
+      await writeAudit(tx, {
+        entityType: "QuotationLine",
+        entityId: existing.id,
+        quotationId: q.id,
+        action: "LINE_UPDATE",
+        actor: actorFromUser(user),
+        before: { product: product.name, qty: existing.qty, discountBp: existing.discountBp },
+        after: { product: product.name, qty: updated.qty, discountBp: updated.discountBp, source: input.source },
+      });
+    } else {
+      const count = await tx.quotationLine.count({ where: { quotationId: q.id } });
+      const line = await tx.quotationLine.create({
+        data: {
+          quotationId: q.id,
+          productId: product.id,
+          planId,
+          lineType: isSubscription ? "RECURRING" : "ONE_TIME",
+          source: input.source,
+          description: product.name,
+          qty: input.qty,
+          unitPrice,
+          unitCost: product.cost,
+          taxBp: product.taxBp,
+          discountBp: input.discountBp,
+          ceilingBp,
+          pricelistRuleId: rule?.id ?? null,
+          sortOrder: count + 1,
+        },
+      });
+      await writeAudit(tx, {
+        entityType: "QuotationLine",
+        entityId: line.id,
+        quotationId: q.id,
+        action: "LINE_ADD",
+        actor: actorFromUser(user),
+        after: { product: product.name, qty: input.qty, discountBp: input.discountBp, unitPrice, source: input.source, priceRule: rule?.note ?? null },
+      });
+    }
+    return recompute(tx, q.id);
+  });
+}
+
+export async function updateLine(input: UpdateLineInput, user: SessionUser): Promise<QuotationTotalsView> {
+  return prisma.$transaction(async (tx) => {
+    const q = await loadForEdit(tx, input.quotationId, input.version, user);
+    const line = await tx.quotationLine.findFirst({ where: { id: input.lineId, quotationId: q.id } });
+    if (!line) throw new NotFoundError("Line not found");
+    const data = {
+      ...(input.qty !== undefined ? { qty: input.qty } : {}),
+      ...(input.discountBp !== undefined ? { discountBp: input.discountBp } : {}),
+    };
+    if (Object.keys(data).length === 0) throw new ValidationError("Nothing to change");
+    const updated = await tx.quotationLine.update({ where: { id: line.id }, data });
+    await writeAudit(tx, {
+      entityType: "QuotationLine",
+      entityId: line.id,
+      quotationId: q.id,
+      action: "LINE_UPDATE",
+      actor: actorFromUser(user),
+      before: { product: line.description, qty: line.qty, discountBp: line.discountBp },
+      after: { product: line.description, qty: updated.qty, discountBp: updated.discountBp },
+    });
+    return recompute(tx, q.id);
+  });
+}
+
+export async function removeLine(input: RemoveLineInput, user: SessionUser): Promise<QuotationTotalsView> {
+  return prisma.$transaction(async (tx) => {
+    const q = await loadForEdit(tx, input.quotationId, input.version, user);
+    const line = await tx.quotationLine.findFirst({ where: { id: input.lineId, quotationId: q.id } });
+    if (!line) throw new NotFoundError("Line not found");
+    await tx.quotationLine.delete({ where: { id: line.id } });
+    await writeAudit(tx, {
+      entityType: "QuotationLine",
+      entityId: line.id,
+      quotationId: q.id,
+      action: "LINE_REMOVE",
+      actor: actorFromUser(user),
+      before: { product: line.description, qty: line.qty, discountBp: line.discountBp },
+    });
+    return recompute(tx, q.id);
+  });
+}
+
+export async function setOrderDiscount(input: SetOrderDiscountInput, user: SessionUser): Promise<QuotationTotalsView> {
+  return prisma.$transaction(async (tx) => {
+    const q = await loadForEdit(tx, input.quotationId, input.version, user);
+    await tx.quotation.update({ where: { id: q.id }, data: { orderDiscountBp: input.orderDiscountBp } });
+    await writeAudit(tx, {
+      entityType: "Quotation",
+      entityId: q.id,
+      quotationId: q.id,
+      action: "ORDER_DISCOUNT",
+      actor: actorFromUser(user),
+      before: { orderDiscountBp: q.orderDiscountBp },
+      after: { orderDiscountBp: input.orderDiscountBp },
+    });
+    return recompute(tx, q.id);
+  });
+}
+
+/**
+ * Recompute every line, the order totals, the margin and the risk preview from
+ * the snapshots on the lines. Called at the end of every mutation.
+ */
+export async function recompute(tx: Tx, quotationId: number): Promise<QuotationTotalsView> {
+  const q = await tx.quotation.findUniqueOrThrow({ where: { id: quotationId }, include: { lines: { orderBy: { sortOrder: "asc" } } } });
+  const totals = computeTotals(
+    q.lines.map((l) => ({ lineId: l.id, unitPrice: l.unitPrice, qty: l.qty, discountBp: l.discountBp, unitCost: l.unitCost, taxBp: l.taxBp })),
+    q.orderDiscountBp,
+  );
+  for (const lt of totals.lines) {
+    await tx.quotationLine.update({
+      where: { id: lt.lineId },
+      data: { effectiveDiscountBp: lt.effectiveDiscountBp, gross: lt.gross, discountAmount: lt.discountAmount, net: lt.net, tax: lt.tax, total: lt.total },
+    });
+  }
+  const cfg = await loadRiskWeights(tx);
+  const rules = await loadRoutingRules(tx);
+  const risk = previewRisk(
+    q.lines.map((l, i) => ({ lineId: l.id, effectiveDiscountBp: totals.lines[i].effectiveDiscountBp, ceilingBp: l.ceilingBp, gross: totals.lines[i].gross })),
+    totals.marginBp,
+    totals.total,
+    cfg,
+    rules,
+  );
+  const updated = await tx.quotation.update({
+    where: { id: quotationId },
+    data: {
+      grossTotal: totals.grossTotal,
+      discountTotal: totals.discountTotal,
+      netTotal: totals.netTotal,
+      taxTotal: totals.taxTotal,
+      total: totals.total,
+      costTotal: totals.costTotal,
+      marginBp: totals.marginBp,
+      riskScore: risk.score,
+      riskBreakdown: JSON.parse(JSON.stringify(risk)) as Prisma.InputJsonValue,
+    },
+  });
+  return { totals, risk, version: updated.version };
+}
+
+async function loadForEdit(tx: Tx, id: number, version: number, user: SessionUser) {
+  const q = await tx.quotation.findUnique({ where: { id }, include: { customer: { include: { tier: true } } } });
+  if (!q) throw new NotFoundError("Quotation not found");
+  assertOwnerOrAdmin(q, user);
+  assertStatus(q.status, EDITABLE, "edit");
+  await lockQuotation(tx, id, version);
+  return q;
+}
+
+/** Narrowest matching tier rule wins: product, then category, then tier wide. */
+async function bestPricelistRule(tx: Tx, tierId: number, categoryId: number, productId: number) {
+  const rules = await tx.pricelistRule.findMany({
+    where: { tierId, OR: [{ productId }, { productId: null, categoryId }, { productId: null, categoryId: null }] },
+  });
+  const rank = (r: { productId: number | null; categoryId: number | null }) => (r.productId ? 0 : r.categoryId ? 1 : 2);
+  return rules.sort((a, b) => rank(a) - rank(b))[0] ?? null;
+}
+
+export async function loadRiskWeights(tx: Tx): Promise<RiskWeights> {
+  const row = await tx.riskConfig.findUnique({ where: { id: 1 } });
+  if (!row) return { wWorst: 50, wBlended: 40, wMargin: 10, normWorstBp: 1000, normBlendedBp: 500, normMarginBp: 1000, floorMarginBp: 2000 };
+  const { wWorst, wBlended, wMargin, normWorstBp, normBlendedBp, normMarginBp, floorMarginBp } = row;
+  return { wWorst, wBlended, wMargin, normWorstBp, normBlendedBp, normMarginBp, floorMarginBp };
+}
+
+export async function loadRoutingRules(tx: Tx): Promise<RoutingRule[]> {
+  const rows = await tx.approvalRule.findMany({ where: { isActive: true }, orderBy: { sequence: "asc" } });
+  return rows.map((r) => ({
+    sequence: r.sequence,
+    minScore: r.minScore,
+    maxWorstOverageBp: r.maxWorstOverageBp,
+    maxOrderTotal: r.maxOrderTotal,
+    chain: approverRoleSchema.array().catch([]).parse(r.chain),
+  }));
+}
