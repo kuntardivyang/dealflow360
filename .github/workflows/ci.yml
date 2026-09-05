@@ -34,9 +34,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm lint
-      - run: pnpm test
-      - name: migrations and seed apply on a fresh database, twice
+      - name: migrate and seed a fresh database
         run: |
           pnpm prisma migrate deploy
           pnpm prisma db seed
-          pnpm prisma migrate reset --force --skip-generate
+      - run: pnpm test
+      - name: reset applies cleanly a second time
+        run: pnpm prisma migrate reset --force --skip-generate
