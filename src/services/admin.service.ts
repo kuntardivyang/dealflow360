@@ -266,3 +266,51 @@ export type GovernanceConfig = Awaited<ReturnType<typeof getGovernanceConfig>>;
 export type WarehousesWithStock = Awaited<ReturnType<typeof getWarehousesWithStock>>;
 export type PlansView = Awaited<ReturnType<typeof getPlans>>;
 export const jsonChain = (chain: Prisma.JsonValue): string[] => (Array.isArray(chain) ? (chain as string[]) : []);
+
+export async function getProducts() {
+  const [products, rules, tiers] = await Promise.all([
+    prisma.product.findMany({
+      orderBy: [{ archivedAt: "asc" }, { name: "asc" }],
+      include: { category: { select: { name: true } }, variants: { select: { id: true, variantLabel: true } }, parent: { select: { name: true } } },
+    }),
+    prisma.pricelistRule.count(),
+    prisma.customerTier.count(),
+  ]);
+  return {
+    products,
+    tiles: {
+      active: products.filter((p) => !p.archivedAt).length,
+      archived: products.filter((p) => p.archivedAt).length,
+      pricelistRules: rules,
+      tiers,
+      variants: products.filter((p) => p.parentId !== null).length,
+    },
+  };
+}
+
+export async function getProductEditor(id: number | null) {
+  const [product, categories, tiers, parents, warehouses] = await Promise.all([
+    id === null
+      ? null
+      : prisma.product.findUnique({
+          where: { id },
+          include: {
+            category: true,
+            parent: { select: { id: true, name: true } },
+            variants: { orderBy: { id: "asc" }, include: { category: { select: { name: true } } } },
+            pricelistRules: { orderBy: { id: "asc" }, include: { tier: { select: { name: true } } } },
+            stockLevels: { include: { warehouse: { select: { name: true } } } },
+            plans: { where: { archivedAt: null }, select: { id: true, name: true, interval: true } },
+          },
+        }),
+    prisma.productCategory.findMany({ orderBy: { sortOrder: "asc" } }),
+    prisma.customerTier.findMany({ orderBy: { sortOrder: "asc" } }),
+    prisma.product.findMany({ where: { parentId: null, archivedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.warehouse.findMany({ where: { archivedAt: null }, orderBy: { priority: "asc" }, select: { id: true, name: true } }),
+  ]);
+  return { product, categories, tiers, parents, warehouses };
+}
+
+export async function getUsers() {
+  return prisma.user.findMany({ orderBy: [{ role: "asc" }, { name: "asc" }], include: { manager: { select: { id: true, name: true } }, _count: { select: { quotations: true } } } });
+}

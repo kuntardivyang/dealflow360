@@ -19,7 +19,7 @@ import { cn } from "@/lib/utils";
 export type FieldDef = {
   name: string;
   label: string;
-  type: "text" | "number" | "percent" | "rupees" | "select" | "checkbox" | "roles";
+  type: "text" | "textarea" | "number" | "percent" | "rupees" | "select" | "checkbox" | "roles";
   options?: { value: string; label: string }[];
   placeholder?: string;
   step?: number;
@@ -72,6 +72,7 @@ export function EntityForm({
   successMessage = "Saved",
   layout = "stack",
   resetOnSuccess = false,
+  redirectTo,
   className,
 }: {
   fields: FieldDef[];
@@ -82,6 +83,8 @@ export function EntityForm({
   successMessage?: string;
   layout?: "stack" | "inline";
   resetOnSuccess?: boolean;
+  /** After a successful save, navigate here; `:id` is replaced with the saved id (e.g. "/admin/products/:id"). */
+  redirectTo?: string;
   className?: string;
 }) {
   const router = useRouter();
@@ -100,6 +103,10 @@ export function EntityForm({
         return;
       }
       toast.success(successMessage);
+      if (redirectTo) {
+        router.push(redirectTo.replace(":id", String(result.data.id)));
+        return;
+      }
       if (resetOnSuccess) setRaw(toRaw({}, fields));
       router.refresh();
     });
@@ -119,7 +126,20 @@ export function EntityForm({
         const id = `${f.name}-${hidden.id ?? initial.id ?? "new"}`;
         return (
           <div key={f.name} className={cn("space-y-1", f.width ?? (inline ? "w-36" : ""))}>
-            {f.type === "checkbox" ? (
+            {f.type === "textarea" ? (
+              <>
+                <Label htmlFor={id} className="text-xs text-muted-foreground">
+                  {f.label}
+                </Label>
+                <textarea
+                  id={id}
+                  value={String(raw[f.name] ?? "")}
+                  onChange={(e) => set(f.name, e.target.value)}
+                  placeholder={f.placeholder}
+                  className="min-h-16 w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                />
+              </>
+            ) : f.type === "checkbox" ? (
               <label className="flex h-8 items-center gap-2 text-sm">
                 <input type="checkbox" checked={Boolean(raw[f.name])} onChange={(e) => set(f.name, e.target.checked)} className="size-4 accent-primary" />
                 {f.label}
