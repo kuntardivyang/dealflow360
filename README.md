@@ -7,7 +7,7 @@ A self-governing sales operations platform built for the Odoo Hackathon 2026 fin
 Prerequisites: Node 22, pnpm 9, Docker.
 
 ```bash
-cp .env.example .env            # database URL (Postgres on port 5433) and session secret
+cp .env.example .env            # database URL (Postgres on port 5433)
 docker compose up -d            # Postgres 17
 pnpm install                    # also generates the Prisma client
 pnpm reset                      # drop, migrate, seed (about 10 seconds)
