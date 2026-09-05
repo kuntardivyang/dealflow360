@@ -39,6 +39,9 @@ export const reviseQuotationSchema = z.object({ quotationId: zId, version: zVers
 
 export const sendToCustomerSchema = z.object({ quotationId: zId, version: zVersion });
 
+/** ADMIN only: confirm the order on the customer's behalf (demo fallback, no portal needed). */
+export const confirmOnBehalfSchema = z.object({ quotationId: zId, version: zVersion, customerName: z.string().trim().min(2).max(120) });
+
 /** Rep answers a portal request (comment, change request or counter discount). */
 export const respondToRequestSchema = z.object({
   quotationId: zId,
@@ -54,5 +57,6 @@ export type RemoveLineInput = z.infer<typeof removeLineSchema>;
 export type SetOrderDiscountInput = z.infer<typeof setOrderDiscountSchema>;
 export type ConfirmQuotationInput = z.infer<typeof confirmQuotationSchema>;
 export type ReviseQuotationInput = z.infer<typeof reviseQuotationSchema>;
+export type ConfirmOnBehalfInput = z.infer<typeof confirmOnBehalfSchema>;
 export type SendToCustomerInput = z.infer<typeof sendToCustomerSchema>;
 export type RespondToRequestInput = z.infer<typeof respondToRequestSchema>;

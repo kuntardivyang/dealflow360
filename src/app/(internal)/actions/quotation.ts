@@ -6,12 +6,14 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import {
   addLineSchema,
+  confirmOnBehalfSchema,
   confirmQuotationSchema,
   createQuotationSchema,
   reviseQuotationSchema,
   ok,
   parseInput,
   removeLineSchema,
+  sendToCustomerSchema,
   setOrderDiscountSchema,
   toActionError,
   updateLineSchema,
@@ -20,6 +22,7 @@ import {
   type QuotationRef,
   type QuotationTotalsView,
 } from "@/lib/contract";
+import * as orders from "@/services/order.service";
 import * as quotations from "@/services/quotation.service";
 import { requireActionUser } from "@/lib/auth/internal";
 
@@ -124,4 +127,43 @@ export async function reviseQuotationForm(formData: FormData): Promise<void> {
   const publicId = String(formData.get("publicId") ?? "");
   if (!result.ok) redirect(`${QUOTES}/${publicId}?error=${encodeURIComponent(result.message)}`);
   redirect(`${QUOTES}/${publicId}`);
+}
+
+/** APPROVED -> SENT; returns the portal link to show on screen. */
+export async function sendToCustomer(input: unknown): Promise<ActionResult<QuotationRef & { portalUrl: string }>> {
+  const p = parseInput(sendToCustomerSchema, input);
+  if (!p.ok) return p;
+  try {
+    const ref = await orders.sendToCustomer(p.data, await requireActionUser());
+    revalidatePath(QUOTES);
+    return ok(ref);
+  } catch (e) {
+    return toActionError(e);
+  }
+}
+
+/** ADMIN only: confirm on the customer's behalf. Creates the split proposal (and billing, next). */
+export async function confirmOnBehalf(input: unknown): Promise<ActionResult<QuotationRef>> {
+  const p = parseInput(confirmOnBehalfSchema, input);
+  if (!p.ok) return p;
+  try {
+    const ref = await orders.confirmOnBehalf(p.data, await requireActionUser(["ADMIN"]));
+    revalidatePath(QUOTES);
+    revalidatePath("/fulfillment");
+    return ok(ref);
+  } catch (e) {
+    return toActionError(e);
+  }
+}
+
+export async function sendToCustomerForm(formData: FormData): Promise<void> {
+  const publicId = String(formData.get("publicId") ?? "");
+  const r = await sendToCustomer({ quotationId: formData.get("quotationId"), version: formData.get("version") });
+  redirect(`${QUOTES}/${publicId}${r.ok ? "" : `?error=${encodeURIComponent(r.message)}`}`);
+}
+
+export async function confirmOnBehalfForm(formData: FormData): Promise<void> {
+  const publicId = String(formData.get("publicId") ?? "");
+  const r = await confirmOnBehalf({ quotationId: formData.get("quotationId"), version: formData.get("version"), customerName: formData.get("customerName") });
+  redirect(`${QUOTES}/${publicId}${r.ok ? "" : `?error=${encodeURIComponent(r.message)}`}`);
 }
