@@ -19,6 +19,17 @@ const stockOf = async (warehouse: string, productName: string) =>
 
 beforeAll(async () => {
   stockBefore = await prisma.stockLevel.findMany({ select: { id: true, onHand: true, reserved: true } });
+  // Pin the stock the assertions rely on (the seed values), whatever earlier clicks did to the dev database.
+  const set = async (warehouse: string, productName: string, onHand: number) => {
+    const row = await prisma.stockLevel.findFirstOrThrow({ where: { warehouse: { name: warehouse }, product: { name: productName } } });
+    await prisma.stockLevel.update({ where: { id: row.id }, data: { onHand, reserved: 0 } });
+  };
+  await set("Main Warehouse", 'Laptop 14"', 6);
+  await set("East Depot", 'Laptop 14"', 5);
+  await set("Main Warehouse", "Docking Station", 20);
+  await set("East Depot", "Docking Station", 0);
+  await set("Main Warehouse", 'Monitor 27"', 2);
+  await set("East Depot", 'Monitor 27"', 10);
 });
 
 afterAll(async () => {

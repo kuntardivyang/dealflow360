@@ -42,6 +42,7 @@ const percentToBp = (s: string): number | null => {
 
 export function Builder({
   quotationId,
+  status,
   lines,
   products,
   suggestions,
@@ -49,6 +50,7 @@ export function Builder({
   initialView,
 }: {
   quotationId: number;
+  status: string;
   lines: BuilderLine[];
   products: PickerProduct[];
   suggestions: UpsellSuggestion[];
@@ -344,12 +346,20 @@ export function Builder({
             <p className="text-xs text-muted-foreground">Ranked by co-purchase history and promotions; low-margin products are hidden. Totals and margin update on add.</p>
           </CardContent>
         </Card>
-        <Button className="w-full" size="lg" disabled={pending || !hasLines} onClick={confirm}>
-          Confirm
-        </Button>
-        <p className="text-center text-xs text-muted-foreground">
-          {!hasLines ? "Add a line to confirm." : view.risk?.chain.length ? `Confirm sends this to: ${chainLabel(view.risk.chain)}` : "Confirm approves this quotation immediately."}
-        </p>
+        {status === "DRAFT" ? (
+          <>
+            <Button className="w-full" size="lg" disabled={pending || !hasLines} onClick={confirm}>
+              Confirm
+            </Button>
+            <p className="text-center text-xs text-muted-foreground">
+              {!hasLines ? "Add a line to confirm." : view.risk?.chain.length ? `Confirm sends this to: ${chainLabel(view.risk.chain)}` : "Confirm approves this quotation immediately."}
+            </p>
+          </>
+        ) : (
+          <p className="rounded-md border border-warning/40 bg-warning/5 p-3 text-center text-xs text-warning">
+            This quotation is already approved or sent. Any edit withdraws the approval and returns it to Draft for a new round.
+          </p>
+        )}
       </div>
     </div>
   );

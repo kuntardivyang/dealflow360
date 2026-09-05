@@ -12,6 +12,7 @@ import {
   type AddLineInput,
   type ConfirmOutcome,
   type ConfirmQuotationInput,
+  type CreateCustomerInput,
   type CreateQuotationInput,
   type ReviseQuotationInput,
   type QuotationRef,
@@ -39,6 +40,27 @@ const toRef = (q: { id: number; publicId: string; number: string; status: Quotat
   status: q.status,
   version: q.version,
 });
+
+/** A rep creates a customer with its portal contact (password demo1234 until the contact changes it). */
+export async function createCustomer(input: CreateCustomerInput, user: SessionUser): Promise<{ id: number; publicId: string; name: string }> {
+  const { hashPassword } = await import("@/lib/auth/internal");
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.customerContact.findUnique({ where: { email: input.contactEmail } });
+    if (existing) throw new ValidationError("A portal contact with this email already exists", { contactEmail: ["Already in use"] });
+    const customer = await tx.customer.create({
+      data: {
+        publicId: publicId(),
+        name: input.name,
+        city: input.city ?? null,
+        email: input.contactEmail,
+        tierId: input.tierId,
+        contacts: { create: { name: input.contactName, email: input.contactEmail, passwordHash: await hashPassword("demo1234") } },
+      },
+    });
+    await audit(tx, { entityType: "Customer", entityId: customer.id, action: "CREATE", actor: actorFromUser(user), after: { name: input.name, tierId: input.tierId, contact: input.contactEmail } });
+    return { id: customer.id, publicId: customer.publicId, name: customer.name };
+  });
+}
 
 export async function createQuotation(input: CreateQuotationInput, user: SessionUser): Promise<QuotationRef> {
   return prisma.$transaction(async (tx) => {
