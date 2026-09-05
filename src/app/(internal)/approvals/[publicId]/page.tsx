@@ -7,7 +7,7 @@ import { ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { EmptyState, Money, PageHeader, StatusBadge } from "@/components/shared";
+import { AuditTrail, EmptyState, Money, PageHeader, StatusBadge } from "@/components/shared";
 import { ApprovalStepper } from "@/components/approvals/stepper";
 import { DecisionPanel } from "@/components/approvals/decision-panel";
 import { requireUser } from "@/lib/auth/internal";
@@ -131,33 +131,7 @@ export default async function ApprovalDetailPage({
               <CardDescription>Every approval, rejection, edit and portal request, with user, time and reason.</CardDescription>
             </CardHeader>
             <CardContent className="px-0">
-              {q.auditLogs.length === 0 ? (
-                <EmptyState className="mx-4 py-8" title="No entries yet" />
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead className="px-4">User</TableHead>
-                      <TableHead>Action</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead className="px-4">Note</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {q.auditLogs.map((a) => (
-                      <TableRow key={a.id} className={cn(String(a.id) === highlightAudit && "bg-success/10 hover:bg-success/15")} data-audit-id={a.id}>
-                        <TableCell className="px-4">
-                          <span className="font-medium">{a.actorName}</span>
-                          {a.actorRole ? <span className="ml-1 text-xs text-muted-foreground">{ROLE_LABEL[a.actorRole as keyof typeof ROLE_LABEL] ?? a.actorRole}</span> : null}
-                        </TableCell>
-                        <TableCell>{a.action.toLowerCase().replaceAll("_", " ")}</TableCell>
-                        <TableCell className="text-muted-foreground">{formatDateTime(a.at)}</TableCell>
-                        <TableCell className="px-4 whitespace-normal text-muted-foreground">{a.reason ?? "–"}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
+              {q.auditLogs.length === 0 ? <EmptyState className="mx-4 py-8" title="No entries yet" /> : <AuditTrail className="px-3" entries={q.auditLogs} subject={q.number} highlightId={highlightAudit} />}
             </CardContent>
           </Card>
         </div>

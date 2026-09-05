@@ -4,3 +4,4 @@ export { Money } from "./money";
 export { StatusBadge } from "./status-badge";
 export { DataTable, type Column } from "./data-table";
 export { StatTile } from "./stat-tile";
+export { AuditTrail, describeChange, describeEntry, type AuditEntry } from "./audit-trail";
