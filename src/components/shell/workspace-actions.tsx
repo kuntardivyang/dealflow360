@@ -28,18 +28,18 @@ export function WorkspaceActions({ canOpenBackend }: { canOpenBackend: boolean }
     <div className="flex items-center gap-1" data-print-hide>
       <Button variant="ghost" size="sm" onClick={reload} disabled={pending} title="Reload Data">
         <RefreshCw className={cn(pending && "animate-spin")} />
-        <span className="hidden xl:inline">Reload Data</span>
+        <span className="hidden 2xl:inline">Reload Data</span>
       </Button>
       {canOpenBackend ? (
         <Button variant="ghost" size="sm" nativeButton={false} render={<Link href="/admin" />} title="Go to Back-end">
           <Settings2 />
-          <span className="hidden xl:inline">Go to Back-end</span>
+          <span className="hidden 2xl:inline">Go to Back-end</span>
         </Button>
       ) : null}
       <form action={logoutAction}>
         <Button type="submit" variant="outline" size="sm" title="Close Workspace">
           <LogOut />
-          <span className="hidden xl:inline">Close Workspace</span>
+          <span className="hidden 2xl:inline">Close Workspace</span>
         </Button>
       </form>
     </div>
