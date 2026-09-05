@@ -15,6 +15,7 @@ import {
   parseInput,
   removeLineSchema,
   sendToCustomerSchema,
+  setCustomerSchema,
   setOrderDiscountSchema,
   toActionError,
   updateLineSchema,
@@ -41,11 +42,24 @@ export async function createQuotation(input: unknown): Promise<ActionResult<Quot
   }
 }
 
-/** Form action behind "+ New Quotation": creates the draft and opens it. */
+/** Form action behind "+ New Quotation": opens an empty draft; the customer is picked in the form header (Odoo-style). */
 export async function createQuotationAndOpen(formData: FormData): Promise<void> {
-  const result = await createQuotation({ customerId: formData.get("customerId") });
+  const customerId = formData.get("customerId");
+  const result = await createQuotation(customerId ? { customerId } : {});
   if (!result.ok) redirect(`${QUOTES}?error=${encodeURIComponent(result.message)}`);
   redirect(`${QUOTES}/${result.data.publicId}`);
+}
+
+export async function setCustomer(input: unknown): Promise<ActionResult<Awaited<ReturnType<typeof quotations.setCustomer>>>> {
+  const p = parseInput(setCustomerSchema, input);
+  if (!p.ok) return p;
+  try {
+    const view = await quotations.setCustomer(p.data, await requireActionUser());
+    revalidatePath(QUOTES);
+    return ok(view);
+  } catch (e) {
+    return toActionError(e);
+  }
 }
 
 export async function addLine(input: unknown): Promise<ActionResult<QuotationTotalsView>> {

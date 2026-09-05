@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { prisma } from "@/lib/db";
+import { createQuotationAndOpen } from "@/app/(internal)/actions/quotation";
 import { formatDateTime } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,9 +33,11 @@ export default async function DashboardPage() {
             <Button variant="outline" nativeButton={false} render={<Link href="/approvals" />}>
               View Approvals
             </Button>
-            <Button disabled title="The quotation builder arrives with the next merge">
-              <Plus /> New Quotation
-            </Button>
+            <form action={createQuotationAndOpen}>
+              <Button type="submit">
+                <Plus /> New Quotation
+              </Button>
+            </form>
           </>
         }
       />
@@ -74,7 +77,7 @@ export default async function DashboardPage() {
                         <Link href={`/quotes/${a.quotation.publicId}`} className="text-primary hover:underline">
                           {a.quotation.number}
                         </Link>{" "}
-                        <span className="text-muted-foreground">({a.quotation.customer.name})</span>
+                        <span className="text-muted-foreground">({a.quotation.customer?.name ?? "no customer"})</span>
                       </>
                     ) : null}
                   </span>

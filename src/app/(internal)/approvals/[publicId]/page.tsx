@@ -51,7 +51,7 @@ export default async function ApprovalDetailPage({
       <PageHeader
         title={
           <>
-            Approval Detail: {q.number} <span className="text-muted-foreground">({q.customer.name})</span>
+            Approval Detail: {q.number} <span className="text-muted-foreground">({q.customer!.name})</span>
           </>
         }
         description={`Submitted by ${q.rep.name}. Request v${current.version}${history.length ? `, ${history.length} earlier version${history.length > 1 ? "s" : ""} superseded` : ""}.`}
@@ -67,8 +67,8 @@ export default async function ApprovalDetailPage({
           Blended Risk <StatusBadge status={band} /> <span className="tabular-nums text-muted-foreground">score {current.riskScore}</span>
         </span>
         <span className="inline-flex items-center gap-2 rounded-lg bg-card px-3 py-1.5 ring-1 ring-foreground/10">
-          Customer Tier <span className="font-medium">{q.customer.tier.name}</span>
-          <span className="text-muted-foreground">(ceiling {formatBp(q.customer.tier.discountCeilingBp)})</span>
+          Customer Tier <span className="font-medium">{q.customer!.tier.name}</span>
+          <span className="text-muted-foreground">(ceiling {formatBp(q.customer!.tier.discountCeilingBp)})</span>
         </span>
         <span className="inline-flex items-center gap-2 rounded-lg bg-card px-3 py-1.5 ring-1 ring-foreground/10">
           Quotation <StatusBadge status={q.status} />

@@ -177,7 +177,7 @@ export async function listApprovals(): Promise<{ rows: ApprovalRow[]; counts: { 
       requestId: r.id,
       publicId: r.quotation.publicId,
       number: r.quotation.number,
-      customer: r.quotation.customer.name,
+      customer: r.quotation.customer?.name ?? "–",
       riskScore: r.riskScore,
       band: riskBand(r.riskScore),
       status: r.status,

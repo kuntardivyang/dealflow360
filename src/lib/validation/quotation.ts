@@ -4,10 +4,13 @@ import { z } from "zod";
 import { zBp, zId, zISODate, zNote, zQty, zVersion } from "./common";
 
 export const createQuotationSchema = z.object({
-  customerId: zId,
+  customerId: zId.optional(), // Odoo-style: the draft opens first, the customer is picked in the header
   promisedDate: zISODate.optional(),
   notes: zNote.optional(),
 });
+
+/** Pick or change the customer of a draft; lines re-price from the tier's price list and ceilings. */
+export const setCustomerSchema = z.object({ quotationId: zId, version: zVersion, customerId: zId });
 
 export const addLineSchema = z.object({
   quotationId: zId,
@@ -51,6 +54,7 @@ export const respondToRequestSchema = z.object({
 });
 
 export type CreateQuotationInput = z.infer<typeof createQuotationSchema>;
+export type SetCustomerInput = z.infer<typeof setCustomerSchema>;
 export type AddLineInput = z.infer<typeof addLineSchema>;
 export type UpdateLineInput = z.infer<typeof updateLineSchema>;
 export type RemoveLineInput = z.infer<typeof removeLineSchema>;

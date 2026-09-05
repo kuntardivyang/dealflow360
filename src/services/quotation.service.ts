@@ -22,6 +22,7 @@ import {
   type RiskWeights,
   type RoutingRule,
   type SessionUser,
+  type SetCustomerInput,
   type SetOrderDiscountInput,
   type UpdateLineInput,
 } from "@/lib/contract";
@@ -64,14 +65,14 @@ export async function createCustomer(input: CreateCustomerInput, user: SessionUs
 
 export async function createQuotation(input: CreateQuotationInput, user: SessionUser): Promise<QuotationRef> {
   return prisma.$transaction(async (tx) => {
-    const customer = await tx.customer.findFirst({ where: { id: input.customerId, archivedAt: null } });
-    if (!customer) throw new NotFoundError("Customer not found");
+    const customer = input.customerId ? await tx.customer.findFirst({ where: { id: input.customerId, archivedAt: null } }) : null;
+    if (input.customerId && !customer) throw new NotFoundError("Customer not found");
     const number = await nextNumber(tx, "quotation", "Q");
     const q = await tx.quotation.create({
       data: {
         publicId: publicId(),
         number,
-        customerId: customer.id,
+        customerId: customer?.id ?? null,
         repUserId: user.id,
         promisedDate: input.promisedDate ? parseISODate(input.promisedDate) : null,
         notes: input.notes ?? null,
@@ -83,9 +84,42 @@ export async function createQuotation(input: CreateQuotationInput, user: Session
       quotationId: q.id,
       action: "CREATE",
       actor: actorFromUser(user),
-      after: { number, customer: customer.name },
+      after: { number, customer: customer?.name ?? null },
     });
     return toRef(q);
+  });
+}
+
+/**
+ * Pick or change the customer of an editable quotation. Every existing line is re-priced
+ * from the new tier (price list rule) and its ceiling re-snapshotted, then totals and risk
+ * are recomputed, so the builder always shows the terms the customer would get.
+ */
+export async function setCustomer(input: SetCustomerInput, user: SessionUser): Promise<QuotationTotalsView & { customer: { id: number; name: string; tier: string; ceilingBp: number } }> {
+  return prisma.$transaction(async (tx) => {
+    const q = await loadForEdit(tx, input.quotationId, input.version, user);
+    const customer = await tx.customer.findFirst({ where: { id: input.customerId, archivedAt: null }, include: { tier: true } });
+    if (!customer) throw new NotFoundError("Customer not found");
+    await tx.quotation.update({ where: { id: q.id }, data: { customerId: customer.id } });
+    const lines = await tx.quotationLine.findMany({ where: { quotationId: q.id }, include: { product: { include: { category: true } } } });
+    for (const l of lines) {
+      const rule = await bestPricelistRule(tx, customer.tier.id, l.product.categoryId, l.product.id);
+      const unitPrice = rule ? applyDiscount(l.product.listPrice, rule.discountBp) : l.product.listPrice;
+      const ceilingBp =
+        l.product.category.discountCeilingBp === null ? customer.tier.discountCeilingBp : Math.min(customer.tier.discountCeilingBp, l.product.category.discountCeilingBp);
+      await tx.quotationLine.update({ where: { id: l.id }, data: { unitPrice, ceilingBp, pricelistRuleId: rule?.id ?? null } });
+    }
+    await audit(tx, {
+      entityType: "Quotation",
+      entityId: q.id,
+      quotationId: q.id,
+      action: "SET_CUSTOMER",
+      actor: actorFromUser(user),
+      before: { customer: q.customer?.name ?? null },
+      after: { customer: customer.name, tier: customer.tier.name },
+    });
+    const view = await recompute(tx, q.id);
+    return { ...view, customer: { id: customer.id, name: customer.name, tier: customer.tier.name, ceilingBp: customer.tier.discountCeilingBp } };
   });
 }
 
@@ -108,6 +142,7 @@ export async function addLine(input: AddLineInput, user: SessionUser): Promise<Q
       planId = plan.id;
     }
 
+    if (!q.customer) throw new ValidationError("Pick a customer first: prices and discount limits depend on the customer's tier", { customerId: ["Required"] });
     const tier = q.customer.tier;
     const rule = await bestPricelistRule(tx, tier.id, product.categoryId, product.id);
     const unitPrice = rule ? applyDiscount(product.listPrice, rule.discountBp) : product.listPrice;
@@ -232,6 +267,7 @@ export async function confirmQuotation(input: ConfirmQuotationInput, user: Sessi
     if (!q) throw new NotFoundError("Quotation not found");
     assertOwnerOrAdmin(q, user);
     assertTransition(q.status, "CONFIRM");
+    if (!q.customerId) throw new ValidationError("Pick a customer before confirming", { customerId: ["Required"] });
     if (q.lines.length === 0) throw new ValidationError("Add at least one line before confirming");
     await lockQuotation(tx, q.id, input.version);
 

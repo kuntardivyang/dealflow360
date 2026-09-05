@@ -53,7 +53,7 @@ export default async function HealthPage({ searchParams }: { searchParams: Promi
                 <TableRow key={a.id}>
                   <TableCell className="px-4">
                     <Link href={`/quotes/${a.quotation.publicId}`} className="font-medium text-primary hover:underline">
-                      {a.quotation.customer.name}
+                      {a.quotation.customer?.name ?? "No customer"}
                     </Link>
                     <span className="block text-xs text-muted-foreground">
                       {a.quotation.number} · {a.quotation.rep.name} · <StatusBadge status={a.quotation.status} className="h-4 px-1.5 text-[10px]" />

@@ -19,6 +19,7 @@ import { loadRiskWeights, loadRoutingRules } from "@/services/quotation.service"
 import { suggestFor } from "@/services/upsell.service";
 import { confirmOnBehalfForm, reviseQuotationForm, sendToCustomerForm } from "../../actions/quotation";
 import { Builder, type BuilderLine, type PickerProduct } from "./_components/builder";
+import { CustomerField } from "@/components/quotes/customer-field";
 import { RiskCard, chainLabel } from "./_components/risk-card";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +45,7 @@ export default async function QuotationDetailPage({
     },
   });
   if (!q) notFound();
+  const customers = await prisma.customer.findMany({ where: { archivedAt: null }, orderBy: { name: "asc" }, include: { tier: true } });
 
   const tab = sp.tab === "audit" ? "audit" : "lines";
   const canEdit = canTransition(q.status, "EDIT_LINES") && (q.repUserId === user.id || user.role === "ADMIN");
@@ -162,8 +164,8 @@ export default async function QuotationDetailPage({
         <ArrowLeft className="size-4" /> Quotations
       </Link>
       <PageHeader
-        title={`${q.number} · ${q.customer.name}`}
-        description={`${q.customer.tier.name} tier (ceiling ${formatBp(q.customer.tier.discountCeilingBp)}) · Rep ${q.rep.name} · Last activity ${formatDateTime(q.lastActivityAt)}`}
+        title={q.customer ? `${q.number} · ${q.customer.name}` : `${q.number} · New quotation`}
+        description={`${q.customer ? `${q.customer.tier.name} tier (ceiling ${formatBp(q.customer.tier.discountCeilingBp)}) · ` : ""}Rep ${q.rep.name} · Last activity ${formatDateTime(q.lastActivityAt)}`}
         actions={
           <>
             <StatusBadge status={q.status} className="h-6 px-3 text-sm" />
@@ -182,6 +184,14 @@ export default async function QuotationDetailPage({
       />
 
       {sp.error ? <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{sp.error}</p> : null}
+
+      <CustomerField
+        quotationId={q.id}
+        version={q.version}
+        customerId={q.customerId}
+        editable={canEdit}
+        customers={customers.map((c) => ({ id: c.id, name: c.name, city: c.city, tier: c.tier.name, ceilingBp: c.tier.discountCeilingBp }))}
+      />
 
       {request && q.status === "PENDING_APPROVAL" ? (
         <Card className="border-warning/40 bg-warning/5">
@@ -234,7 +244,7 @@ export default async function QuotationDetailPage({
                 <input type="hidden" name="quotationId" value={q.id} />
                 <input type="hidden" name="version" value={q.version} />
                 <input type="hidden" name="publicId" value={q.publicId} />
-                <input type="hidden" name="customerName" value={q.customer.name} />
+                <input type="hidden" name="customerName" value={q.customer?.name ?? ""} />
                 <Button type="submit" variant="outline" title="Admin only: confirm the order on the customer's behalf">
                   Confirm on behalf
                 </Button>

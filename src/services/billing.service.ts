@@ -35,7 +35,7 @@ export async function onConfirmed(tx: Tx, quotationId: number, actor: Actor): Pr
         publicId: publicId(),
         number,
         kind: "ONE_TIME",
-        customerId: q.customerId,
+        customerId: q.customerId!,
         quotationId: q.id,
         subtotal: oneTime.reduce((s, l) => s + l.net, 0),
         taxTotal: oneTime.reduce((s, l) => s + l.tax, 0),
@@ -68,7 +68,7 @@ export async function onConfirmed(tx: Tx, quotationId: number, actor: Actor): Pr
     const subscription = await tx.subscription.create({
       data: {
         publicId: publicId(),
-        customerId: q.customerId,
+        customerId: q.customerId!,
         quotationId: q.id,
         quotationLineId: line.id,
         productId: line.productId,
@@ -102,7 +102,7 @@ export async function onConfirmed(tx: Tx, quotationId: number, actor: Actor): Pr
         publicId: publicId(),
         number,
         kind: "RECURRING",
-        customerId: q.customerId,
+        customerId: q.customerId!,
         quotationId: q.id,
         subscriptionId: subscription.id,
         subtotal: first.net,
