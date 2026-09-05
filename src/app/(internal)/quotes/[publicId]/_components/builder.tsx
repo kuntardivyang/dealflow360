@@ -43,6 +43,7 @@ const percentToBp = (s: string): number | null => {
 
 export function Builder({
   quotationId,
+  status,
   lines,
   products,
   suggestions,
@@ -50,6 +51,7 @@ export function Builder({
   initialView,
 }: {
   quotationId: number;
+  status: string;
   lines: BuilderLine[];
   products: PickerProduct[];
   suggestions: UpsellSuggestion[];
@@ -345,6 +347,8 @@ export function Builder({
             <p className="text-xs text-muted-foreground">Ranked by co-purchase history and promotions; low-margin products are hidden. Totals and margin update on add.</p>
           </CardContent>
         </Card>
+        {status === "DRAFT" ? (
+          <>
         <div className="grid grid-cols-[auto_1fr] gap-2">
           <Link href="/quotes" className={cn(buttonVariants({ variant: "outline", size: "lg" }))} title="Every change is already saved; go back to the list">
             Save Draft
@@ -356,6 +360,12 @@ export function Builder({
         <p className="text-center text-xs text-muted-foreground">
           {!hasLines ? "Add a line to confirm." : view.risk?.chain.length ? `Routes automatically to: ${chainLabel(view.risk.chain)}` : "Within every limit: approves immediately, no approval step needed."}
         </p>
+          </>
+        ) : (
+          <p className="rounded-md border border-warning/40 bg-warning/5 p-3 text-center text-xs text-warning">
+            This quotation is already approved or sent. Any edit withdraws the approval and returns it to Draft for a new round.
+          </p>
+        )}
       </div>
     </div>
   );

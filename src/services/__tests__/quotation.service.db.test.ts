@@ -21,7 +21,7 @@ afterAll(async () => {
 
 describe("quotation service against the database", () => {
   it("builds the PDF section 10 quote: laptop fine, setup service 8 points over, score 42, Sales Manager only", async () => {
-    const riya = await userByEmail("riya@df.local");
+    const riya = await userByEmail("riya@test.com");
     const acme = await customer("Acme Corp");
     const ref = await svc.createQuotation({ customerId: acme.id }, riya);
     created.push(ref.id);
@@ -57,8 +57,8 @@ describe("quotation service against the database", () => {
   });
 
   it("rejects a stale version and another rep, and applies tier price rules", async () => {
-    const riya = await userByEmail("riya@df.local");
-    const arjun = await userByEmail("arjun@df.local");
+    const riya = await userByEmail("riya@test.com");
+    const arjun = await userByEmail("arjun@test.com");
     const beta = await customer("Beta Industries"); // Silver: Training Day has a 5 % tier rule
     const ref = await svc.createQuotation({ customerId: beta.id }, riya);
     created.push(ref.id);
@@ -77,7 +77,7 @@ describe("quotation service against the database", () => {
   });
 
   it("merges a repeated product into one line, updates and removes it", async () => {
-    const riya = await userByEmail("riya@df.local");
+    const riya = await userByEmail("riya@test.com");
     const gamma = await customer("Gamma Retail");
     const ref = await svc.createQuotation({ customerId: gamma.id }, riya);
     created.push(ref.id);
@@ -100,7 +100,7 @@ describe("quotation service against the database", () => {
 
 describe("confirm and approval rounds", () => {
   it("confirms the PDF quote into PENDING_APPROVAL with one Sales Manager step, and a within-limit quote straight to APPROVED", async () => {
-    const riya = await userByEmail("riya@df.local");
+    const riya = await userByEmail("riya@test.com");
     const acme = await customer("Acme Corp");
     const laptop = await product('Laptop 14"');
     const setup = await product("Setup Service");
@@ -146,7 +146,7 @@ describe("confirm and approval rounds", () => {
   });
 
   it("refuses to confirm an empty quotation", async () => {
-    const riya = await userByEmail("riya@df.local");
+    const riya = await userByEmail("riya@test.com");
     const gamma = await customer("Gamma Retail");
     const ref = await svc.createQuotation({ customerId: gamma.id }, riya);
     created.push(ref.id);

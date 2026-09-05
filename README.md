@@ -22,11 +22,11 @@ All passwords are `demo1234`.
 
 | Role | Email | Sees |
 |---|---|---|
-| Sales Rep | `riya@df.local`, `arjun@df.local` | Quotations, builder, fulfillment and billing read-only |
-| Sales Manager | `meera@df.local` | Approvals, deal health, back-end configuration |
-| Finance | `farhan@df.local` | Second-level approvals, fulfillment, payments |
-| Admin | `admin@df.local` | Everything, plus confirm on the customer's behalf |
-| Customer (portal) | `buyer@acme.com` (Gold), `buyer@beta.com` (Silver), `buyer@gamma.com` (Bronze) | Their own quotations at `/portal` |
+| Sales Rep | `riya@test.com`, `arjun@test.com` | Quotations, builder, fulfillment and billing read-only |
+| Sales Manager | `meera@test.com` | Approvals, deal health, back-end configuration |
+| Finance | `farhan@test.com` | Second-level approvals, fulfillment, payments |
+| Admin | `admin@test.com` | Everything, plus confirm on the customer's behalf |
+| Customer (portal) | `acme@test.com` (Gold), `beta@test.com` (Silver), `gamma@test.com` (Bronze) | Their own quotations at `/portal` |
 
 Customers and staff use different session tables and cookies (`df_session` on `/`, `df_portal` on `/portal`); a staff cookie never opens the portal and a portal cookie never opens the workspace.
 
@@ -36,7 +36,7 @@ Customers and staff use different session tables and cookies (`df_session` on `/
 2. Add Laptop 14" x10 at 12 percent and Setup Service x2 at 18 percent. Services allow 10 percent, so that line shows **Over +8 pt**; the blended risk score is **42**.
 3. Press **Confirm**. There is no "request approval" button: routing sends the quotation to the Sales Manager by itself.
 4. Add the Docking Station from the upsell panel first if you like: total and margin update in the same response.
-5. Log in as Meera, approve. Log in as Riya, **Send to customer**. Log in as `buyer@acme.com` at `/portal`, counter a bigger discount: the quotation re-enters approval automatically, this time Manager then Finance. Approve as Meera and Farhan, then confirm from the portal.
+5. Log in as Meera, approve. Log in as Riya, **Send to customer**. Log in as `acme@test.com` at `/portal`, counter a bigger discount: the quotation re-enters approval automatically, this time Manager then Finance. Approve as Meera and Farhan, then confirm from the portal.
 6. Fulfillment proposes the split from live stock: Main Warehouse 6 laptops, East Depot 4. Accept it: the stock is reserved in one locked transaction. Mark shipped.
 7. Invoices: the one-time invoice and, for orders with a Support Pro line, a separate recurring invoice with a twelve-period schedule under Subscriptions.
 8. Record a partial payment, then the rest. The invoice goes Unpaid, Partially Paid, Paid, and the order becomes Paid.

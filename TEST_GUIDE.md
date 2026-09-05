@@ -12,7 +12,7 @@ Conventions: **[Riya]** = the browser is logged in as that user. "Toast" = the g
 |---|---|---|
 | 1 | `docker compose up -d` | Postgres 17 on `localhost:5433` (`dealflow360-db` healthy) |
 | 2 | `pnpm install` | also runs `prisma generate` |
-| 3 | `pnpm reset` (**run this yourself, by hand; never let an AI tool run it**, it drops the database) | migrations + seed; last line `Seed complete ... Logins: *@df.local / demo1234, portal buyer@acme.com / demo1234` |
+| 3 | `pnpm reset` (**run this yourself, by hand; never let an AI tool run it**, it drops the database) | migrations + seed; last line `Seed complete ... Logins: *@test.com / demo1234, portal acme@test.com / demo1234` |
 | 4 | `pnpm dev` | app at http://localhost:3000 |
 | 5 | Optional: `pnpm test` then `pnpm smoke` | vitest green; smoke prints `PASS 1..8` and `SMOKE PASSED`. Both consume demo stock (they reserve Laptop 14" at Main 6/6), so run `pnpm reset` again before the manual flows. |
 
@@ -36,11 +36,11 @@ Logins (password `demo1234` everywhere):
 
 | Login | Role | Used for |
 |---|---|---|
-| `admin@df.local` | Admin | back-end, Confirm on behalf, stands in for any approver |
-| `meera@df.local` | Sales Manager (Riya's and Arjun's manager) | approvals step 1, deal health actions |
-| `farhan@df.local` | Finance | approvals step 2, fulfillment, payments |
-| `riya@df.local`, `arjun@df.local` | Sales Rep | quotations |
-| `buyer@acme.com` (Acme Corp, Gold) · `buyer@beta.com` (Beta, Silver) · `buyer@gamma.com` (Gamma Retail, Bronze) | Portal customer | `/portal/login` |
+| `admin@test.com` | Admin | back-end, Confirm on behalf, stands in for any approver |
+| `meera@test.com` | Sales Manager (Riya's and Arjun's manager) | approvals step 1, deal health actions |
+| `farhan@test.com` | Finance | approvals step 2, fulfillment, payments |
+| `riya@test.com`, `arjun@test.com` | Sales Rep | quotations |
+| `acme@test.com` (Acme Corp, Gold) · `beta@test.com` (Beta, Silver) · `gamma@test.com` (Gamma Retail, Bronze) | Portal customer | `/portal/login` |
 
 Two browser profiles help: a normal window for staff (cookie `df_session`, path `/`) and an incognito window for the portal (cookie `df_portal`, path `/portal`). Staff logout = **Close Workspace** (top right); it deletes the session row.
 
@@ -50,14 +50,14 @@ Two browser profiles help: a normal window for staff (cookie `df_session`, path 
 
 **1a. Signup is forced to Sales Rep.** Open http://localhost:3000 → redirected to `/login`. Click **Sign Up**.
 1. Submit with password `short` → field error "At least 8 characters".
-2. Fill Full name `Test Rep`, Email `test.rep@df.local`, Password `demo1234` → **Create account** → lands on `/dashboard`. The user chip shows "Test Rep · Sales Rep". The nav has 8 tabs (Dashboard … Reports) and **no Product tab, no "Go to Back-end" button**. Note the helper text on the form: "New accounts start as Sales Rep."
+2. Fill Full name `Test Rep`, Email `test.rep@test.com`, Password `demo1234` → **Create account** → lands on `/dashboard`. The user chip shows "Test Rep · Sales Rep". The nav has 8 tabs (Dashboard … Reports) and **no Product tab, no "Go to Back-end" button**. Note the helper text on the form: "New accounts start as Sales Rep."
 3. Type `/admin` in the address bar → redirected to `/dashboard?forbidden=admin`.
 4. Sign up again with the same email → "That email is already registered".
 5. **Close Workspace** → back at `/login`.
 
-**1b. Login.** Wrong password → "Invalid email or password" (same message for an unknown email). Log in as `riya@df.local` → `/dashboard` with three tiles: Pending Approvals 0, Open Quotations 5 on a fresh seed (Q-0001, Q-0004, 1025, 1026, 1027; live count), At-Risk Deals (0 until Deal Health has run once, then 4). Visiting `/approvals` while logged out redirects to `/login?next=%2Fapprovals` and returns you there after login.
+**1b. Login.** Wrong password → "Invalid email or password" (same message for an unknown email). Log in as `riya@test.com` → `/dashboard` with three tiles: Pending Approvals 0, Open Quotations 5 on a fresh seed (Q-0001, Q-0004, 1025, 1026, 1027; live count), At-Risk Deals (0 until Deal Health has run once, then 4). Visiting `/approvals` while logged out redirects to `/login?next=%2Fapprovals` and returns you there after login.
 
-**1c. Portal login is separate.** In the incognito window open `/portal` → redirected to `/portal/login`. Log in `buyer@acme.com` → "My Quotations" list, on a fresh seed one row: `Q-2026-1025` (Arjun's Sent quote), status Sent. Staff cookies do not work here and vice versa: paste `/quotes` into the incognito window → redirected to `/login`.
+**1c. Portal login is separate.** In the incognito window open `/portal` → redirected to `/portal/login`. Log in `acme@test.com` → "My Quotations" list, on a fresh seed one row: `Q-2026-1025` (Arjun's Sent quote), status Sent. Staff cookies do not work here and vice versa: paste `/quotes` into the incognito window → redirected to `/login`.
 
 ---
 
@@ -116,14 +116,14 @@ Open **Approvals** → click a row → Approval Detail: risk chips, "Why This Qu
 
 **5a. Send.** **[Riya]** Quotations → `Q-2026-0001` (Approved) → **Send to customer** → status **Sent**; blue card shows `Portal link: /portal/q/<publicId>`. Copy the 12-character id. Audit: SEND.
 
-**5b. Portal view.** Incognito: `/portal/q/<publicId>` → redirected to `/portal/login?next=…` → `buyer@acme.com` / `demo1234` → back on the quotation. Check:
+**5b. Portal view.** Incognito: `/portal/q/<publicId>` → redirected to `/portal/login?next=…` → `acme@test.com` / `demo1234` → back on the quotation. Check:
 - Header "Quotation Q-2026-0001 for Acme Corp", status **Sent**.
 - Columns are only Line / Qty / Unit price / Discount / Line total (incl. 18% tax) / Customer Comment. **No cost, margin, limit, overage, risk score, approver or rep names anywhere** (check the page source or DevTools network response too: the DTO is a whitelist).
 - Lines: Laptop 14" 10 × ₹60,000.00 at 12% = ₹6,23,040.00; Setup Service 2 × ₹8,000.00 at 18% = ₹15,481.60; Docking Station 1 × ₹6,000.00 = ₹7,080.00. Subtotal ₹5,47,120.00, Tax ₹98,481.60, Total ₹6,45,601.60.
 - Nav: My Quotation / Messages / Profile (Profile: Nisha Acme, Acme Corp, Ahmedabad, tier Gold).
-- Wrong customer: log in as `buyer@beta.com` and open the same URL → **404**. Any unknown id → 404.
+- Wrong customer: log in as `beta@test.com` and open the same URL → **404**. Any unknown id → 404.
 
-**5c. Comment and change request.** As buyer@acme.com, tab **Comment**, Line "Whole quotation", message `Can you deliver before the 20th?` → **Submit Request** → toast "Request sent to your sales representative." Status becomes **Under Negotiation**; the request lists under "Your requests" as Open and on **Messages**. Tab **Change request**, line Setup Service, Requested Delivery Date any date, message `Push setup to next month` → Submit → second Open request; the Setup line's Customer Comment column shows it. Internally **[Riya]** the quote shows **Negotiation** and the audit trail has PORTAL_COMMENT / PORTAL_CHANGE_REQUEST by Nisha Acme (contact). Confirm Quotation is still enabled (comments do not block).
+**5c. Comment and change request.** As acme@test.com, tab **Comment**, Line "Whole quotation", message `Can you deliver before the 20th?` → **Submit Request** → toast "Request sent to your sales representative." Status becomes **Under Negotiation**; the request lists under "Your requests" as Open and on **Messages**. Tab **Change request**, line Setup Service, Requested Delivery Date any date, message `Push setup to next month` → Submit → second Open request; the Setup line's Customer Comment column shows it. Internally **[Riya]** the quote shows **Negotiation** and the audit trail has PORTAL_COMMENT / PORTAL_CHANGE_REQUEST by Nisha Acme (contact). Confirm Quotation is still enabled (comments do not block).
 
 **5d. Counter discount above the ceiling → automatic re-approval.** Tab **Counter discount**, Line **Setup Service (current discount 18%)**, Counter Discount % `25`, message `Can this be 25%?` → **Submit Request** → toast "Request sent. Your counter-offer needs an internal approval…". Portal status **Awaiting internal approval**; the request form is disabled ("Your last request is being reviewed internally"); Confirm disabled.
 **[Meera]** Approvals: `Q-2026-0001` now has a **v2** row, **High 78**, Stage Sales Manager; the v1 row shows **Superseded**. Detail: "Request v2, 1 earlier version superseded"; flagged table shows Setup Service **18%** given (v2 scores the proposed 25 %: worst 15 pt over, hence Finance). Steps "Sales Manager, then Finance". Approve (`fine for Acme`) → still Pending, Stage Finance. **[Farhan]** approve → quotation back to **Sent**; the Setup Service line now reads **25%**, total ₹14,160.00; quotation Total **₹6,44,280.00**, Margin 20.22%. The portal request is marked **Accepted** (portal: status Sent again, line Discount 25%, Total ₹6,44,280.00).
@@ -168,7 +168,7 @@ Side card: Shipments 2, Estimated shipping cost ₹1,300.00, Plan **Split Pendin
 - Pay the balance (default value) with UPI → **Paid**, Balance ₹0.00, progress step Paid ✓, the Record Payment card disappears. Quotations: `Q-2026-0001` badge **Paid** (all invoices of the order paid). Audit on the quote: RECORD_PAYMENT ×2, PAID.
 - Double click / refresh-resubmit of the payment form records **one** payment (hidden `clientRef` is idempotent).
 
-**7b. Hybrid order: one-time + recurring on one order.** **[Riya]** Quotations → `Q-2026-0004` (Approved from 3b) → **Send to customer**. **[Admin]** → **Confirm on behalf** (or incognito as `buyer@beta.com` → My Quotations → Q-2026-0004 → Confirm Quotation, name `Rahul Beta`). Then:
+**7b. Hybrid order: one-time + recurring on one order.** **[Riya]** Quotations → `Q-2026-0004` (Approved from 3b) → **Send to customer**. **[Admin]** → **Confirm on behalf** (or incognito as `beta@test.com` → My Quotations → Q-2026-0004 → Confirm Quotation, name `Rahul Beta`). Then:
 - Invoices: two new rows for Beta Industries: **One-time ₹1,34,520.00** (`INV-2026-000N`) and **Recurring ₹2,360.00** (`INV-2026-000N+1`), both Unpaid, due `<today + 15>`. Open the recurring one: header "Recurring invoice · Monthly · order Q-2026-0004"; line "Support Pro · Monthly · `<today>` to `<today + 1 month − 1 day>`", 2 × ₹1,000.00, net ₹2,000.00, tax ₹360.00, total ₹2,360.00.
 - Fulfillment: `Q-2026-0004 · Split Pending`. On a fresh seed Main Warehouse 2 × Laptop 14", 1 shipment ₹500.00; **after Flow 6 the laptop stock is Main 0 / East 1, so the proposal is East Depot 1 × Laptop 14" + Backorder 1** (expected `<today + 10>`). Receive 5 laptops at Main first if you want a clean single shipment (the proposal is fixed at confirm time; a new one is only proposed on confirm, so receive stock **before** confirming).
 - Subscriptions tab: Active 1 · row **Beta Industries · Support Pro × 2 · Monthly · Next bill `<today + 1 month>` · Active**. Click it → Billing detail:
@@ -198,7 +198,7 @@ Tier ceilings work the same way: Bronze 5 → 35 makes a new Gamma line with a 3
 
 **8f. Products** (`/admin/products`, also the **Product** nav tab). Tiles Total Products 8 (8 active, 0 archived), Pricelists 2 (3 tiers, 1 currency), Variants 1. Click Laptop 14" → General Info (kind, category, price, cost, tax 18%, promoted), **Variants** table (Laptop 16", extra price ₹15,000), **Pricelists** rules. **+ New Product** → create `Webcam`, SKU `HW-CAM`, Hardware, ₹4,000 / ₹2,500 → redirected to its page; it shows in the builder's Hardware chip. Adding a Gold price rule "minus 10 %" on Training Day is already seeded: in a builder for Acme, Training Day is priced ₹13,500.00 (the audit LINE_ADD shows `priceRule: "Gold price on training"`); for Gamma it stays ₹15,000.00.
 
-**8g. Users** (`/admin/users`, **Admin only**; Meera gets `/dashboard?forbidden=1`). Rows with Role and Reports to. Change `Test Rep` (from 1a) to **Sales Manager** → Save → toast. Log in as test.rep@df.local: the Product tab and Go to Back-end appear on the next request (role is read from the database every request; no re-login needed). Setting a user as their own manager is refused.
+**8g. Users** (`/admin/users`, **Admin only**; Meera gets `/dashboard?forbidden=1`). Rows with Role and Reports to. Change `Test Rep` (from 1a) to **Sales Manager** → Save → toast. Log in as test.rep@test.com: the Product tab and Go to Back-end appear on the next request (role is read from the database every request; no re-login needed). Setting a user as their own manager is refused.
 
 ---
 

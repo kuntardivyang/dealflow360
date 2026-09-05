@@ -12,7 +12,7 @@ export interface PortalQuotationSource {
   taxTotal: number;
   total: number;
   confirmedAt: Date | null;
-  customer: { name: string };
+  customer: { name: string } | null;
   lines: { id: number; description: string; qty: number; unitPrice: number; discountBp: number; total: number; taxBp: number }[];
   portalRequests: {
     id: number;
@@ -31,7 +31,7 @@ export function toPortalQuotation(q: PortalQuotationSource): PortalQuotationDTO 
   return {
     publicId: q.publicId,
     number: q.number,
-    customerName: q.customer.name,
+    customerName: q.customer?.name ?? "",
     status: portalStatusLabel(q.status),
     lines: q.lines.map((l) => ({
       id: l.id,

@@ -8,6 +8,7 @@ import {
   addLineSchema,
   confirmOnBehalfSchema,
   confirmQuotationSchema,
+  createCustomerSchema,
   createQuotationSchema,
   reviseQuotationSchema,
   ok,
@@ -15,6 +16,7 @@ import {
   removeLineSchema,
   respondToRequestSchema,
   sendToCustomerSchema,
+  setCustomerSchema,
   setOrderDiscountSchema,
   toActionError,
   updateLineSchema,
@@ -43,11 +45,24 @@ export async function createQuotation(input: unknown): Promise<ActionResult<Quot
   }
 }
 
-/** Form action behind "+ New Quotation": creates the draft and opens it. */
+/** Form action behind "+ New Quotation": opens an empty draft; the customer is picked in the form header (Odoo-style). */
 export async function createQuotationAndOpen(formData: FormData): Promise<void> {
-  const result = await createQuotation({ customerId: formData.get("customerId") });
+  const customerId = formData.get("customerId");
+  const result = await createQuotation(customerId ? { customerId } : {});
   if (!result.ok) redirect(`${QUOTES}${errorQuery(result)}`);
   redirect(`${QUOTES}/${result.data.publicId}`);
+}
+
+export async function setCustomer(input: unknown): Promise<ActionResult<Awaited<ReturnType<typeof quotations.setCustomer>>>> {
+  const p = parseInput(setCustomerSchema, input);
+  if (!p.ok) return p;
+  try {
+    const view = await quotations.setCustomer(p.data, await requireActionUser());
+    revalidatePath(QUOTES);
+    return ok(view);
+  } catch (e) {
+    return toActionError(e);
+  }
 }
 
 export async function addLine(input: unknown): Promise<ActionResult<QuotationTotalsView>> {
@@ -195,4 +210,25 @@ export async function respondToRequestForm(formData: FormData): Promise<void> {
     ...(note ? { note } : {}),
   });
   redirect(`${QUOTES}/${publicId}${r.ok ? "" : `${errorQuery(r)}`}`);
+}
+
+/** Form action behind "New customer" on the quotations page: creates the customer and opens a draft for it. */
+export async function createCustomerAndQuote(formData: FormData): Promise<void> {
+  const p = parseInput(createCustomerSchema, {
+    name: formData.get("name"),
+    tierId: formData.get("tierId"),
+    city: formData.get("city") || undefined,
+    contactName: formData.get("contactName"),
+    contactEmail: formData.get("contactEmail"),
+  });
+  if (!p.ok) redirect(`${QUOTES}?error=${encodeURIComponent(`${p.message} ${Object.values(p.fieldErrors ?? {}).flat().join(" ")}`)}`);
+  let customerId: number;
+  try {
+    customerId = (await quotations.createCustomer(p.data, await requireActionUser())).id;
+  } catch (e) {
+    redirect(`${QUOTES}?error=${encodeURIComponent(toActionError(e).message)}`);
+  }
+  const result = await createQuotation({ customerId });
+  if (!result.ok) redirect(`${QUOTES}?error=${encodeURIComponent(result.message)}`);
+  redirect(`${QUOTES}/${result.data.publicId}`);
 }

@@ -25,7 +25,7 @@ async function confirmedOrder(customerName: string, productId: number, qty: numb
 }
 
 async function main() {
-  const [riya, admin, farhan] = await Promise.all([user("riya@df.local"), user("admin@df.local"), user("farhan@df.local")]);
+  const [riya, admin, farhan] = await Promise.all([user("riya@test.com"), user("admin@test.com"), user("farhan@test.com")]);
   const laptop = await prisma.product.findFirstOrThrow({ where: { name: 'Laptop 14"' } });
   const main = await prisma.stockLevel.findFirstOrThrow({ where: { product: { id: laptop.id }, warehouse: { name: "Main Warehouse" } } });
   const east = await prisma.stockLevel.findFirstOrThrow({ where: { product: { id: laptop.id }, warehouse: { name: "East Depot" } } });

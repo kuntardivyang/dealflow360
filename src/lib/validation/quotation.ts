@@ -4,10 +4,13 @@ import { z } from "zod";
 import { zBp, zId, zISODate, zNote, zQty, zVersion } from "./common";
 
 export const createQuotationSchema = z.object({
-  customerId: zId,
+  customerId: zId.optional(), // Odoo-style: the draft opens first, the customer is picked in the header
   promisedDate: zISODate.optional(),
   notes: zNote.optional(),
 });
+
+/** Pick or change the customer of a draft; lines re-price from the tier's price list and ceilings. */
+export const setCustomerSchema = z.object({ quotationId: zId, version: zVersion, customerId: zId });
 
 export const addLineSchema = z.object({
   quotationId: zId,
@@ -51,6 +54,7 @@ export const respondToRequestSchema = z.object({
 });
 
 export type CreateQuotationInput = z.infer<typeof createQuotationSchema>;
+export type SetCustomerInput = z.infer<typeof setCustomerSchema>;
 export type AddLineInput = z.infer<typeof addLineSchema>;
 export type UpdateLineInput = z.infer<typeof updateLineSchema>;
 export type RemoveLineInput = z.infer<typeof removeLineSchema>;
@@ -60,3 +64,13 @@ export type ReviseQuotationInput = z.infer<typeof reviseQuotationSchema>;
 export type ConfirmOnBehalfInput = z.infer<typeof confirmOnBehalfSchema>;
 export type SendToCustomerInput = z.infer<typeof sendToCustomerSchema>;
 export type RespondToRequestInput = z.infer<typeof respondToRequestSchema>;
+
+/** A rep adds a customer while quoting: name, tier and the portal contact. Portal password defaults to demo1234. */
+export const createCustomerSchema = z.object({
+  name: z.string().trim().min(2, "Company name is too short").max(120),
+  tierId: zId,
+  city: z.string().trim().max(80).optional(),
+  contactName: z.string().trim().min(2, "Contact name is too short").max(120),
+  contactEmail: z.string().trim().toLowerCase().email("Enter a valid email"),
+});
+export type CreateCustomerInput = z.infer<typeof createCustomerSchema>;

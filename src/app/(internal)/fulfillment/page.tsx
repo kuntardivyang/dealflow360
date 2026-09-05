@@ -50,7 +50,7 @@ export default async function FulfillmentPage({ searchParams }: { searchParams: 
   };
   const orderColumns: Column<Order>[] = [
     { key: "number", header: "Order", cell: (o) => <span className="font-semibold tabular-nums">{o.number}</span> },
-    { key: "customer", header: "Customer", cell: (o) => o.customer.name },
+    { key: "customer", header: "Customer", cell: (o) => o.customer!.name },
     {
       key: "status",
       header: "Status",

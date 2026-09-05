@@ -46,9 +46,9 @@ afterAll(async () => {
 
 describe("order path: confirm, split, reserve, ship", () => {
   it("splits 10 laptops as Main 6 + East 4, reserves with row locks, ships from Main", async () => {
-    const riya = await userByEmail("riya@df.local");
-    const admin = await userByEmail("admin@df.local");
-    const farhan = await userByEmail("farhan@df.local");
+    const riya = await userByEmail("riya@test.com");
+    const admin = await userByEmail("admin@test.com");
+    const farhan = await userByEmail("farhan@test.com");
     const acme = await prisma.customer.findFirstOrThrow({ where: { name: "Acme Corp" } });
     const laptop = await product('Laptop 14"');
     const dock = await product("Docking Station");
@@ -109,8 +109,8 @@ describe("order path: confirm, split, reserve, ship", () => {
   });
 
   it("backorders what no warehouse has and rejects a stale accept when stock ran out", async () => {
-    const riya = await userByEmail("riya@df.local");
-    const admin = await userByEmail("admin@df.local");
+    const riya = await userByEmail("riya@test.com");
+    const admin = await userByEmail("admin@test.com");
     const beta = await prisma.customer.findFirstOrThrow({ where: { name: "Beta Industries" } });
     const monitor = await product('Monitor 27"'); // Main 2, East 10
 

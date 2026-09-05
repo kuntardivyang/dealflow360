@@ -58,7 +58,7 @@ export async function runReport(f: ReportFilterInput) {
     id: q.id,
     publicId: q.publicId,
     number: q.number,
-    customer: q.customer.name,
+    customer: q.customer?.name ?? "–",
     rep: q.rep.name,
     status: q.status,
     createdAt: q.createdAt,

@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DataTable, EmptyState, Money, PageHeader, StatusBadge, type Column } from "@/components/shared";
+import { DataTable, EmptyState, Money, PageHeader, StatusBadge, type Column, AuditTrail } from "@/components/shared";
 import { overageBp } from "@/domain/money";
 import { scoreLines } from "@/domain/risk";
 import { riskPreview } from "@/domain/route";
@@ -19,6 +19,7 @@ import { loadRiskWeights, loadRoutingRules } from "@/services/quotation.service"
 import { suggestFor } from "@/services/upsell.service";
 import { confirmOnBehalfForm, respondToRequestForm, reviseQuotationForm, sendToCustomerForm } from "../../actions/quotation";
 import { Builder, type BuilderLine, type PickerProduct } from "./_components/builder";
+import { CustomerField } from "@/components/quotes/customer-field";
 import { RiskCard, chainLabel } from "./_components/risk-card";
 
 export const dynamic = "force-dynamic";
@@ -46,6 +47,7 @@ export default async function QuotationDetailPage({
     },
   });
   if (!q) notFound();
+  const customers = await prisma.customer.findMany({ where: { archivedAt: null }, orderBy: { name: "asc" }, include: { tier: true } });
 
   const tab = sp.tab === "audit" ? "audit" : "lines";
   const canEdit = canTransition(q.status, "EDIT_LINES") && (q.repUserId === user.id || user.role === "ADMIN");
@@ -167,8 +169,8 @@ export default async function QuotationDetailPage({
         <ArrowLeft className="size-4" /> Quotations
       </Link>
       <PageHeader
-        title={`${q.number} · ${q.customer.name}`}
-        description={`${q.customer.tier.name} tier (ceiling ${formatBp(q.customer.tier.discountCeilingBp)}) · Rep ${q.rep.name} · Last activity ${formatDateTime(q.lastActivityAt)}`}
+        title={q.customer ? `${q.number} · ${q.customer.name}` : `${q.number} · New quotation`}
+        description={`${q.customer ? `${q.customer.tier.name} tier (ceiling ${formatBp(q.customer.tier.discountCeilingBp)}) · ` : ""}Rep ${q.rep.name} · Last activity ${formatDateTime(q.lastActivityAt)}`}
         actions={
           <>
             <StatusBadge status={q.status} className="h-6 px-3 text-sm" />
@@ -192,18 +194,38 @@ export default async function QuotationDetailPage({
         <div className="px-5 py-3.5">
           <p className="text-xs font-medium text-muted-foreground">Customer</p>
           <p className="mt-1 text-sm">
-            <span className="font-heading text-base font-bold tracking-tight">{q.customer.name}</span>{" "}
-            <span className="text-muted-foreground">· {q.customer.tier.name} tier</span>
+            {q.customer ? (
+              <>
+                <span className="font-heading text-base font-bold tracking-tight">{q.customer.name}</span>{" "}
+                <span className="text-muted-foreground">· {q.customer.tier.name} tier</span>
+              </>
+            ) : (
+              <span className="text-muted-foreground">No customer yet. Pick one in the form above.</span>
+            )}
           </p>
         </div>
         <div className="px-5 py-3.5">
           <p className="text-xs font-medium text-muted-foreground">Price List</p>
           <p className="mt-1 text-sm">
-            <span className="font-heading text-base font-bold tracking-tight">{q.customer.tier.name} price list</span>{" "}
-            <span className="text-muted-foreground">· INR · discount ceiling {formatBp(q.customer.tier.discountCeilingBp)}</span>
+            {q.customer ? (
+              <>
+                <span className="font-heading text-base font-bold tracking-tight">{q.customer.tier.name} price list</span>{" "}
+                <span className="text-muted-foreground">· INR · discount ceiling {formatBp(q.customer.tier.discountCeilingBp)}</span>
+              </>
+            ) : (
+              <span className="text-muted-foreground">Set by the customer&apos;s tier.</span>
+            )}
           </p>
         </div>
       </div>
+
+      <CustomerField
+        quotationId={q.id}
+        version={q.version}
+        customerId={q.customerId}
+        editable={canEdit}
+        customers={customers.map((c) => ({ id: c.id, name: c.name, city: c.city, tier: c.tier.name, ceilingBp: c.tier.discountCeilingBp }))}
+      />
 
       {request && q.status === "PENDING_APPROVAL" ? (
         <Card className="border-l-4 border-l-warning bg-warning/5">
@@ -256,7 +278,7 @@ export default async function QuotationDetailPage({
                 <input type="hidden" name="quotationId" value={q.id} />
                 <input type="hidden" name="version" value={q.version} />
                 <input type="hidden" name="publicId" value={q.publicId} />
-                <input type="hidden" name="customerName" value={q.customer.name} />
+                <input type="hidden" name="customerName" value={q.customer?.name ?? ""} />
                 <Button type="submit" variant="outline" title="Admin only: confirm the order on the customer's behalf">
                   Confirm on behalf
                 </Button>
@@ -354,27 +376,7 @@ export default async function QuotationDetailPage({
             {audit.length === 0 ? (
               <EmptyState title="No entries yet" />
             ) : (
-              <ul className="divide-y">
-                {audit.map((a) => (
-                  <li key={a.id} className="grid gap-1 py-3 text-sm sm:grid-cols-[160px_1fr]">
-                    <div className="text-muted-foreground">{formatDateTime(a.at)}</div>
-                    <div className="space-y-1">
-                      <p>
-                        <span className="font-medium">{a.actorName}</span>
-                        {a.actorRole ? <span className="text-muted-foreground"> ({a.actorRole.toLowerCase().replaceAll("_", " ")})</span> : null} ·{" "}
-                        <span className="font-mono text-xs">{a.action}</span> on {a.entityType.toLowerCase()} #{a.entityId}
-                      </p>
-                      {a.reason ? <p className="text-muted-foreground">Reason: {a.reason}</p> : null}
-                      {a.beforeJson !== null || a.afterJson !== null ? (
-                        <p className="font-mono text-xs text-muted-foreground break-all">
-                          {a.beforeJson !== null ? `before ${JSON.stringify(a.beforeJson)} ` : ""}
-                          {a.afterJson !== null ? `after ${JSON.stringify(a.afterJson)}` : ""}
-                        </p>
-                      ) : null}
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              <AuditTrail entries={audit} subject={q.number} />
             )}
           </CardContent>
         </Card>
@@ -382,6 +384,7 @@ export default async function QuotationDetailPage({
         <Builder
           key={`${q.version}-${q.updatedAt.getTime()}`}
           quotationId={q.id}
+          status={q.status}
           lines={builderLines}
           products={products}
           suggestions={suggestions.map((s) => ({ productId: s.productId, name: s.name, category: s.category, listPrice: s.listPrice, unit: s.unit, marginDelta: s.marginDelta, isPromoted: s.isPromoted, reason: s.reason }))}

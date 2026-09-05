@@ -9,7 +9,7 @@ const warehouseIds: number[] = [];
 const ruleIds: number[] = [];
 
 async function admin(): Promise<SessionUser> {
-  const u = await prisma.user.findUniqueOrThrow({ where: { email: "admin@df.local" } });
+  const u = await prisma.user.findUniqueOrThrow({ where: { email: "admin@test.com" } });
   return { id: u.id, name: u.name, email: u.email, role: u.role, managerId: u.managerId };
 }
 

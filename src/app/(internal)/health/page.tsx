@@ -54,7 +54,7 @@ export default async function HealthPage({ searchParams }: { searchParams: Promi
                 <ClickableRow key={a.id} href={`/quotes/${a.quotation.publicId}`} className="align-top">
                   <TableCell className="px-4 py-3">
                     <Link href={`/quotes/${a.quotation.publicId}`} className="font-semibold text-link hover:underline">
-                      {a.quotation.customer.name}
+                      {a.quotation.customer?.name ?? "No customer"}
                     </Link>
                     <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
                       <span className="tabular-nums">{a.quotation.number}</span>

@@ -440,7 +440,7 @@ model Quotation {
   id                   Int             @id @default(autoincrement())
   publicId             String          @unique @map("public_id")
   number               String          @unique
-  customerId           Int             @map("customer_id")
+  customerId           Int?            @map("customer_id")
   repUserId            Int             @map("rep_user_id")
   status               QuotationStatus @default(DRAFT)
   currency             String          @default("INR")
@@ -467,7 +467,7 @@ model Quotation {
   createdAt            DateTime        @default(now()) @map("created_at")
   updatedAt            DateTime        @updatedAt @map("updated_at")
 
-  customer         Customer          @relation(fields: [customerId], references: [id])
+  customer         Customer?         @relation(fields: [customerId], references: [id])
   rep              User              @relation("QuotationRep", fields: [repUserId], references: [id])
   lines            QuotationLine[]
   approvalRequests ApprovalRequest[]

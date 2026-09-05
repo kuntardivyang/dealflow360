@@ -39,7 +39,7 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
   const filter = CHIPS.find((s) => s === sp.status);
   const table = sp.view === "table";
 
-  const [quotes, counts, customers] = await Promise.all([
+  const [quotes, counts] = await Promise.all([
     prisma.quotation.findMany({
       where: filter ? { status: { in: (Object.keys(STAGE_OF) as QuotationStatus[]).filter((st) => STAGE_OF[st] === filter) } } : undefined,
       include: { customer: { select: { name: true } }, rep: { select: { name: true } } },
@@ -47,7 +47,6 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
       take: 200,
     }),
     prisma.quotation.groupBy({ by: ["status"], _count: { _all: true } }),
-    prisma.customer.findMany({ where: { archivedAt: null }, orderBy: { name: "asc" }, include: { tier: { select: { name: true } } } }),
   ]);
   const total = counts.reduce((n, c) => n + c._count._all, 0);
   const countOf = (s: QuotationStatus) => counts.filter((c) => STAGE_OF[c.status] === s).reduce((n, c) => n + c._count._all, 0);
@@ -71,7 +70,7 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
   type Row = (typeof quotes)[number];
   const columns: Column<Row>[] = [
     { key: "number", header: "Quotation", cell: (q) => <span className="font-semibold tabular-nums">{q.number}</span> },
-    { key: "customer", header: "Customer", cell: (q) => q.customer.name },
+    { key: "customer", header: "Customer", cell: (q) => q.customer?.name ?? <span className="text-muted-foreground">No customer yet</span> },
     { key: "rep", header: "Rep", cell: (q) => q.rep.name },
     { key: "total", header: "Amount", align: "right", cell: (q) => <Money paise={q.total} /> },
     { key: "margin", header: "Margin", align: "right", cell: (q) => <span className="tabular-nums">{formatBp(q.marginBp)}</span> },
@@ -86,17 +85,7 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
         description={table ? "Every quotation in the system, one per row. Click a row to open it." : "Every quotation in the system, one card per quotation, grouped by stage. Click a card to open it."}
         actions={
           <>
-            <form action={createQuotationAndOpen} className="flex items-center gap-2">
-              <select name="customerId" required defaultValue="" className="h-8 max-w-56 rounded-lg border border-input bg-card px-2 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50" aria-label="Customer">
-                <option value="" disabled>
-                  Customer…
-                </option>
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name} ({c.tier.name})
-                  </option>
-                ))}
-              </select>
+            <form action={createQuotationAndOpen}>
               <Button type="submit">
                 <Plus /> New Quotation
               </Button>
@@ -109,6 +98,7 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
       />
 
       {sp.error ? <p className="rounded-lg bg-destructive/8 px-3 py-2 text-sm text-destructive ring-1 ring-inset ring-destructive/20">{sp.error}</p> : null}
+
 
       <div className="flex flex-wrap gap-2" data-print-hide>
         <Link href={href({ status: null })} className={chip(!filter)}>
@@ -124,7 +114,7 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
       {quotes.length === 0 ? (
         <EmptyState
           title={filter ? `No ${QUOTATION_STATUS_LABEL[filter].toLowerCase()} quotations` : "No quotations yet"}
-          description="Pick a customer and press New Quotation to start one."
+          description="Press New Quotation to start one; the customer is picked inside the quotation."
         />
       ) : table ? (
         <DataTable columns={columns} rows={quotes} rowKey={(q) => q.id} rowHref={(q) => `/quotes/${q.publicId}`} />
@@ -148,7 +138,7 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
                           <Card className="surface-interactive gap-0 py-0">
                             <CardContent className="space-y-1.5 px-3 py-3">
                               <div className="flex items-start justify-between gap-2">
-                                <p className="truncate text-sm font-semibold leading-tight">{q.customer.name}</p>
+                                <p className="truncate text-sm font-semibold leading-tight">{q.customer?.name ?? "No customer yet"}</p>
                                 <Money paise={q.total} className="shrink-0 font-heading text-sm font-bold" />
                               </div>
                               <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">

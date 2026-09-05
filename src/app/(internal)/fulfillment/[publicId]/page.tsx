@@ -59,7 +59,7 @@ export default async function FulfillmentDetailPage({ params, searchParams }: { 
         <ArrowLeft className="size-4" /> Fulfillment
       </Link>
       <PageHeader
-        title={`${q.number} · ${q.customer.name}`}
+        title={`${q.number} · ${q.customer!.name}`}
         description={plan ? `Opened from the Fulfillment list · ${plan.isManual ? "manual split" : "recommended split"} from live stock · ${plan.shipmentCount} shipment${plan.shipmentCount === 1 ? "" : "s"}` : "No goods to ship on this order"}
         actions={
           <>
