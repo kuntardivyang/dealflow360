@@ -134,7 +134,11 @@ export async function confirmFromPortal(input: PortalConfirmInput, portal: Porta
     }
 
     const view = await recompute(tx, q.id);
-    if (view.risk.chain.length > 0) {
+    // Safety net: the terms on the table must be covered by an approval. Every edit or counter
+    // already opens a round, so this only fires if something slipped past (never for terms whose
+    // current approval version was approved).
+    const covered = await tx.approvalRequest.findFirst({ where: { quotationId: q.id, version: q.approvalVersion, status: "APPROVED" } });
+    if (view.risk.chain.length > 0 && !covered) {
       const approvalVersion = await openApprovalRound(tx, q.id, q.approvalVersion, view.risk, "Terms changed since approval");
       await tx.quotation.update({ where: { id: q.id }, data: { status: "PENDING_APPROVAL", approvalVersion, negotiationPending: true, version: { increment: 1 } } });
       await audit(tx, { entityType: "Quotation", entityId: q.id, quotationId: q.id, action: "PORTAL_CONFIRM", actor, after: { status: "PENDING_APPROVAL", chain: view.risk.chain } });
@@ -235,9 +239,9 @@ async function previewProposal(tx: Tx, q: LoadedQuote, lineId: number, proposedB
   return riskPreview(scoreLines(scored, totals.marginBp, cfg), totals.total, rules);
 }
 
-/** New approval request + steps for the given risk; any pending request is superseded. Returns the new approval version. */
+/** New approval request + steps for the given risk; the pending or approved request it replaces is superseded. Returns the new approval version. */
 async function openApprovalRound(tx: Tx, quotationId: number, currentVersion: number, risk: RiskPreview, reason: string): Promise<number> {
-  await tx.approvalRequest.updateMany({ where: { quotationId, status: "PENDING" }, data: { status: "SUPERSEDED", resolvedAt: new Date(), reason } });
+  await tx.approvalRequest.updateMany({ where: { quotationId, status: { in: ["PENDING", "APPROVED"] } }, data: { status: "SUPERSEDED", resolvedAt: new Date(), reason } });
   let version = currentVersion + 1;
   while (await tx.approvalRequest.findUnique({ where: { quotationId_version: { quotationId, version } } })) version += 1;
   await tx.approvalRequest.create({
