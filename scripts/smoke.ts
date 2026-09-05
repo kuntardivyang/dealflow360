@@ -98,12 +98,12 @@ async function main() {
   });
 
   await step(5, "Get the quotation approved, send it, confirm, and see stock pulled across two warehouses", async () => {
-    let steps = await db.approvalStep.findMany({ where: { requestId, status: "PENDING" }, orderBy: { stepNo: "asc" } });
+    const steps = await db.approvalStep.findMany({ where: { requestId, status: "PENDING" }, orderBy: { stepNo: "asc" } });
     for (const s of steps) {
       const approver = s.requiredRole === "FINANCE" ? farhan : meera;
       await decide({ requestId, stepId: s.id, decision: "APPROVE", note: "smoke" }, approver);
     }
-    let q = await db.quotation.findUniqueOrThrow({ where: { id: quotationId } });
+    const q = await db.quotation.findUniqueOrThrow({ where: { id: quotationId } });
     check(q.status === "APPROVED", `after approval status ${q.status}`);
     const sent = await sendToCustomer({ quotationId, version: q.version }, riya);
     check(sent.status === "SENT", `after send status ${sent.status}`);
