@@ -31,7 +31,7 @@ export type BuilderLine = {
   ceilingBp: number;
   total: number;
 };
-export type PickerProduct = { id: number; name: string; category: string; kind: string; listPrice: number; unit: string; isPromoted: boolean };
+export type PickerProduct = { id: number; name: string; category: string; kind: string; listPrice: number; unit: string; isPromoted: boolean; recurring: string | null };
 export type BuilderView = { totals: Totals; risk: RiskPreview | null; version: number };
 export type UpsellSuggestion = { productId: number; name: string; category: string; listPrice: number; unit: string; marginDelta: number; isPromoted: boolean; reason: string };
 
@@ -274,6 +274,7 @@ export function Builder({
                     </p>
                     <p className="text-xs text-muted-foreground">
                       <Money paise={p.listPrice} /> · {p.unit}
+                      {p.recurring ? ` · ${p.recurring}` : ""}
                     </p>
                   </div>
                   <Button size="sm" variant="outline" disabled={pending} onClick={() => run(addLine({ quotationId, version: view.version, productId: p.id, qty: 1, discountBp: 0, source: "MANUAL" }))}>

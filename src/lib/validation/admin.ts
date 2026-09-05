@@ -57,10 +57,12 @@ export const stockLevelSchema = z.object({
   leadDays: z.coerce.number().int().min(0).max(365).default(7),
 });
 
+export const billingIntervalSchema = z.enum(["WEEK", "MONTH", "QUARTER", "YEAR"]);
+
 export const planSchema = z.object({
   id: zId.optional(),
   name: zName,
-  interval: z.enum(["WEEK", "MONTH", "QUARTER", "YEAR"]),
+  interval: billingIntervalSchema,
   periods: z.coerce.number().int().min(1).max(60).default(12),
   prorationMode: z.enum(["DAY_BASED", "NONE"]).default("DAY_BASED"),
   billChangeDay: z.coerce.boolean().default(true),
@@ -69,22 +71,28 @@ export const planSchema = z.object({
   productId: zId.nullable().default(null),
 });
 
-export const productSchema = z.object({
-  id: zId.optional(),
-  sku: z.string().trim().min(2).max(40),
-  name: zName,
-  description: z.string().trim().max(2000).optional(),
-  kind: z.enum(["GOOD", "SERVICE", "SUBSCRIPTION"]),
-  categoryId: zId,
-  unit: z.string().trim().min(1).max(20).default("Each"),
-  listPrice: zMoney,
-  cost: zMoney,
-  taxBp: zBp.default(1800),
-  isPromoted: z.coerce.boolean().default(false),
-  parentId: zId.nullable().default(null),
-  variantLabel: z.string().trim().max(60).optional(),
-  extraPrice: zMoney.default(0),
-});
+/** Screen 17: the Subscription switch reveals Recurring (interval); the price is then per period. */
+export const productSchema = z
+  .object({
+    id: zId.optional(),
+    sku: z.string().trim().min(2).max(40),
+    name: zName,
+    description: z.string().trim().max(2000).optional(),
+    kind: z.enum(["GOOD", "SERVICE"]),
+    isSubscription: z.coerce.boolean().default(false),
+    recurringInterval: billingIntervalSchema.nullable().default(null),
+    categoryId: zId,
+    unit: z.string().trim().min(1).max(20).default("Each"),
+    listPrice: zMoney,
+    cost: zMoney,
+    taxBp: zBp.default(1800),
+    isPromoted: z.coerce.boolean().default(false),
+    parentId: zId.nullable().default(null),
+    variantLabel: z.string().trim().max(60).optional(),
+    extraPrice: zMoney.default(0),
+  })
+  .refine((p) => !p.isSubscription || p.recurringInterval !== null, { path: ["recurringInterval"], message: "Pick how often a subscription is billed" })
+  .transform((p) => ({ ...p, recurringInterval: p.isSubscription ? p.recurringInterval : null }));
 
 export const pricelistRuleSchema = z.object({
   id: zId.optional(),

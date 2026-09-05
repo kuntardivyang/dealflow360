@@ -175,6 +175,8 @@ export function saveProduct(input: ProductInput, user: SessionUser) {
     name: input.name,
     description: input.description ?? null,
     kind: input.kind,
+    isSubscription: input.isSubscription,
+    recurringInterval: input.recurringInterval,
     categoryId: input.categoryId,
     unit: input.unit,
     listPrice: input.listPrice,
@@ -192,7 +194,7 @@ export function saveProduct(input: ProductInput, user: SessionUser) {
     (tx, id) => tx.product.findUnique({ where: { id } }),
     (tx) => tx.product.create({ data }),
     (tx, id) => tx.product.update({ where: { id }, data }),
-    (p) => ({ sku: p.sku, name: p.name, kind: p.kind, categoryId: p.categoryId, listPrice: p.listPrice, cost: p.cost, taxBp: p.taxBp, isPromoted: p.isPromoted, parentId: p.parentId, extraPrice: p.extraPrice }),
+    (p) => ({ sku: p.sku, name: p.name, kind: p.kind, isSubscription: p.isSubscription, recurringInterval: p.recurringInterval, categoryId: p.categoryId, listPrice: p.listPrice, cost: p.cost, taxBp: p.taxBp, isPromoted: p.isPromoted, parentId: p.parentId, extraPrice: p.extraPrice }),
   );
 }
 
@@ -257,7 +259,7 @@ export async function getWarehousesWithStock() {
 export async function getPlans() {
   const [plans, products] = await Promise.all([
     prisma.recurringPlan.findMany({ where: { archivedAt: null }, orderBy: { id: "asc" }, include: { product: { select: { id: true, name: true } } } }),
-    prisma.product.findMany({ where: { archivedAt: null, kind: "SUBSCRIPTION" }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    prisma.product.findMany({ where: { archivedAt: null, isSubscription: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ]);
   return { plans, products };
 }

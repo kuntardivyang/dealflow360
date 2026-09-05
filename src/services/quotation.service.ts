@@ -1,6 +1,7 @@
 // Owner: A. Every mutation runs in one transaction: optimistic lock, status guard,
 // the change, recompute of totals and risk, and an audit row.
 import { Prisma } from "@/generated/prisma/client";
+import type { BillingInterval } from "@/generated/prisma/enums";
 import { parseISODate } from "@/domain/dates";
 import { applyDiscount } from "@/domain/money";
 import { computeTotals } from "@/domain/totals";
@@ -134,12 +135,12 @@ export async function addLine(input: AddLineInput, user: SessionUser): Promise<Q
     if (!product) throw new NotFoundError("Product not found");
     if (!Number.isInteger(input.qty) || input.qty < 1) throw new ValidationError("Quantity must be a whole number of at least 1", { qty: ["At least 1"] });
 
-    const isSubscription = product.kind === "SUBSCRIPTION";
+    // The Subscription switch on the product decides the line type; the product's
+    // Recurring interval picks the plan (product-specific first, then the shared one).
+    const isSubscription = product.isSubscription;
     let planId: number | null = null;
     if (isSubscription) {
-      const plan = input.planId
-        ? await tx.recurringPlan.findFirst({ where: { id: input.planId, archivedAt: null } })
-        : (product.plans[0] ?? (await tx.recurringPlan.findFirst({ where: { archivedAt: null, productId: null }, orderBy: { id: "asc" } })));
+      const plan = input.planId ? await tx.recurringPlan.findFirst({ where: { id: input.planId, archivedAt: null } }) : await planForProduct(tx, product);
       if (!plan) throw new ValidationError("Pick a recurring plan for this subscription product", { planId: ["Required"] });
       planId = plan.id;
     }
@@ -407,6 +408,27 @@ async function loadForEdit(tx: Tx, id: number, version: number, user: SessionUse
     after: { status: back.status, approvalVersion: back.approvalVersion },
   });
   return { ...q, status: back.status, approvalVersion: back.approvalVersion };
+}
+
+const INTERVAL_LABEL: Record<BillingInterval, string> = { WEEK: "Weekly", MONTH: "Monthly", QUARTER: "Quarterly", YEAR: "Yearly" };
+const DEFAULT_PERIODS: Record<BillingInterval, number> = { WEEK: 52, MONTH: 12, QUARTER: 4, YEAR: 1 };
+
+/**
+ * The plan behind a product ticked as a subscription: a plan limited to this product on its
+ * interval, else the shared plan for that interval, else a shared plan is created for the
+ * interval (Weekly / Monthly / Quarterly / Yearly) so ticking the switch is enough.
+ */
+export async function planForProduct(
+  tx: Tx,
+  product: { id: number; name: string; recurringInterval: BillingInterval | null; plans: { id: number; interval: BillingInterval }[] },
+): Promise<{ id: number } | null> {
+  const interval = product.recurringInterval;
+  if (!interval) return product.plans[0] ?? null;
+  const own = product.plans.find((p) => p.interval === interval) ?? product.plans[0];
+  if (own) return own;
+  const shared = await tx.recurringPlan.findFirst({ where: { archivedAt: null, productId: null, interval }, orderBy: { id: "asc" } });
+  if (shared) return shared;
+  return tx.recurringPlan.create({ data: { name: INTERVAL_LABEL[interval], interval, periods: DEFAULT_PERIODS[interval] } });
 }
 
 /** Narrowest matching tier rule wins: product, then category, then tier wide. */

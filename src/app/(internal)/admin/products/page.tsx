@@ -10,6 +10,8 @@ import { getProducts } from "@/services/admin.service";
 
 export const metadata = { title: "Products" };
 
+const INTERVAL_UNIT: Record<string, string> = { WEEK: "week", MONTH: "month", QUARTER: "quarter", YEAR: "year" };
+
 export default async function ProductsPage() {
   await requireUser(BACKEND_ROLES);
   const { products, tiles } = await getProducts();
@@ -26,11 +28,11 @@ export default async function ProductsPage() {
       ),
     },
     { key: "variants", header: "Variants", cell: (p) => (p.variants.length ? `${p.variants.length} (${p.variants.map((v) => v.variantLabel ?? "?").join(", ")})` : "–") },
-    { key: "price", header: "Price", align: "right", cell: (p) => <span><Money paise={p.listPrice} />{p.kind === "SUBSCRIPTION" ? <span className="text-xs text-muted-foreground">/period</span> : null}</span> },
+    { key: "price", header: "Price", align: "right", cell: (p) => <span><Money paise={p.listPrice} />{p.isSubscription ? <span className="text-xs text-muted-foreground">/{INTERVAL_UNIT[p.recurringInterval ?? "MONTH"]}</span> : null}</span> },
     { key: "unit", header: "Unit", cell: (p) => p.unit },
     { key: "tax", header: "Tax", align: "right", cell: (p) => formatBp(p.taxBp) },
     { key: "status", header: "Status", cell: (p) => <StatusBadge status={p.archivedAt ? "CANCELLED" : "ACTIVE"} label={p.archivedAt ? "Archived" : "Active"} /> },
-    { key: "category", header: "Category", cell: (p) => <span>{p.category.name}{p.kind === "SUBSCRIPTION" ? <span className="ml-1 text-xs text-muted-foreground">recurring</span> : null}{p.isPromoted ? <span className="ml-1 text-xs text-info">promoted</span> : null}</span> },
+    { key: "category", header: "Category", cell: (p) => <span>{p.category.name}{p.isSubscription ? <span className="ml-1 text-xs text-muted-foreground">subscription</span> : null}{p.isPromoted ? <span className="ml-1 text-xs text-info">promoted</span> : null}</span> },
   ];
   return (
     <div className="space-y-6">

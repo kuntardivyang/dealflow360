@@ -10,7 +10,8 @@ export interface Suggestion {
   productId: number;
   name: string;
   category: string;
-  kind: "GOOD" | "SERVICE" | "SUBSCRIPTION";
+  kind: "GOOD" | "SERVICE";
+  isSubscription: boolean;
   listPrice: Money;
   unit: string;
   marginDelta: Money; // margin added per unit at list price
@@ -67,6 +68,7 @@ export async function suggestFor(quotationId: number, limit = 4): Promise<Sugges
         name: p.name,
         category: p.category.name,
         kind: p.kind,
+        isSubscription: p.isSubscription,
         listPrice: p.listPrice,
         unit: p.unit,
         marginDelta: p.listPrice - p.cost,

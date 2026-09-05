@@ -27,6 +27,8 @@ export type FieldDef = {
   nullable?: boolean;
   hint?: string;
   width?: string;
+  /** Show this field only while another checkbox field is ticked (e.g. Recurring under Subscription). Hidden fields submit null. */
+  showWhen?: string;
 };
 
 type Raw = Record<string, string | boolean | string[] | undefined>;
@@ -53,7 +55,8 @@ function toInput(raw: Raw, fields: FieldDef[], hidden: Record<string, unknown>):
   const out: Record<string, unknown> = { ...hidden };
   for (const f of fields) {
     const v = raw[f.name];
-    if (f.type === "checkbox") out[f.name] = Boolean(v);
+    if (f.showWhen && !raw[f.showWhen]) out[f.name] = null;
+    else if (f.type === "checkbox") out[f.name] = Boolean(v);
     else if (f.type === "roles") out[f.name] = v ?? [];
     else if (v === "" || v === undefined) out[f.name] = f.nullable ? null : undefined;
     else if (f.type === "percent" || f.type === "rupees") out[f.name] = Math.round(Number(v) * 100);
@@ -122,6 +125,7 @@ export function EntityForm({
       noValidate
     >
       {fields.map((f) => {
+        if (f.showWhen && !raw[f.showWhen]) return null;
         const err = errors[f.name]?.[0];
         const id = `${f.name}-${hidden.id ?? initial.id ?? "new"}`;
         return (

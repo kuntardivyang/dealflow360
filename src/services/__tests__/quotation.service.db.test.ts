@@ -96,6 +96,42 @@ describe("quotation service against the database", () => {
     expect(view.totals.lines).toHaveLength(0);
     expect(view.totals.marginBp).toBeNull();
   });
+
+  it("the Subscription switch on the product makes the line recurring on the product's interval; a plain product stays one-time", async () => {
+    const riya = await userByEmail("riya@test.com");
+    const beta = await customer("Beta Industries");
+    const ref = await svc.createQuotation({ customerId: beta.id }, riya);
+    created.push(ref.id);
+
+    // Seeded: Support Pro is a SERVICE ticked as a subscription, billed monthly; the laptop is a plain good.
+    const supportPro = await product("Support Pro");
+    expect(supportPro.kind).toBe("SERVICE");
+    expect(supportPro.isSubscription).toBe(true);
+    expect(supportPro.recurringInterval).toBe("MONTH");
+    let view = await svc.addLine({ quotationId: ref.id, version: ref.version, productId: supportPro.id, qty: 2, discountBp: 0, source: "MANUAL" }, riya);
+    const laptop = await product('Laptop 14"');
+    view = await svc.addLine({ quotationId: ref.id, version: view.version, productId: laptop.id, qty: 1, discountBp: 0, source: "MANUAL" }, riya);
+
+    const lines = await prisma.quotationLine.findMany({ where: { quotationId: ref.id }, include: { plan: true }, orderBy: { sortOrder: "asc" } });
+    expect(lines[0].lineType).toBe("RECURRING");
+    expect(lines[0].plan?.interval).toBe("MONTH"); // the shared Monthly plan, picked from the product's Recurring setting
+    expect(lines[1].lineType).toBe("ONE_TIME");
+    expect(lines[1].planId).toBeNull();
+
+    // A product ticked as recurring on an interval with no plan yet: the shared plan is created on first use.
+    const weekly = await prisma.product.create({
+      data: { sku: `SB-WEEKLY-${ref.id}`, name: `Weekly Backup ${ref.id}`, kind: "SERVICE", isSubscription: true, recurringInterval: "WEEK", categoryId: supportPro.categoryId, listPrice: 200_00, cost: 50_00 },
+    });
+    try {
+      view = await svc.addLine({ quotationId: ref.id, version: view.version, productId: weekly.id, qty: 1, discountBp: 0, source: "MANUAL" }, riya);
+      const weeklyLine = await prisma.quotationLine.findFirstOrThrow({ where: { quotationId: ref.id, productId: weekly.id }, include: { plan: true } });
+      expect(weeklyLine.lineType).toBe("RECURRING");
+      expect(weeklyLine.plan).toMatchObject({ interval: "WEEK", productId: null, periods: 52 });
+    } finally {
+      await prisma.quotationLine.deleteMany({ where: { productId: weekly.id } });
+      await prisma.product.delete({ where: { id: weekly.id } });
+    }
+  });
 });
 
 describe("confirm and approval rounds", () => {

@@ -116,6 +116,8 @@ erDiagram
     string name
     string description
     enum kind
+    boolean isSubscription
+    enum recurringInterval
     int categoryId FK
     string unit
     int listPrice
@@ -505,7 +507,7 @@ erDiagram
   product o|--o{ pricelist_rule : "productId"
   product ||--o{ product_pairing : "productId"
   product ||--o{ product_pairing : "pairedProductId"
-  customer ||--o{ quotation : "customerId"
+  customer o|--o{ quotation : "customerId"
   app_user ||--o{ quotation : "repUserId"
   quotation ||--o{ quotation_line : "quotationId"
   product ||--o{ quotation_line : "productId"

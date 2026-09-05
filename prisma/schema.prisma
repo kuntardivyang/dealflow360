@@ -25,10 +25,11 @@ enum Role {
   FINANCE
 }
 
+// What the product physically is. Whether it is billed once or per period is the
+// separate Subscription switch on the product (Odoo-style boolean), not a kind.
 enum ProductKind {
   GOOD
   SERVICE
-  SUBSCRIPTION
 }
 
 enum BillingInterval {
@@ -323,6 +324,10 @@ model Product {
   name         String
   description  String?
   kind         ProductKind
+  // Subscription switch (mockup screen 17): ticked = recurring, billed per period on the
+  // interval below; unticked = one-time. Any kind of product can be recurring.
+  isSubscription    Boolean          @default(false) @map("is_subscription")
+  recurringInterval BillingInterval? @map("recurring_interval") // required when isSubscription
   categoryId   Int         @map("category_id")
   unit         String      @default("Each")
   listPrice    Int         @map("list_price") // paise, per unit (per period for subscriptions)
