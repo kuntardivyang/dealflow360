@@ -14,7 +14,7 @@ async function userByEmail(email: string): Promise<SessionUser> {
 
 /** A pending quotation with a two-step request (Manager, then Finance), owned by riya. */
 async function pendingQuote(chain: ("SALES_MANAGER" | "FINANCE")[], negotiationPending = false) {
-  const riya = await userByEmail("riya@df.local");
+  const riya = await userByEmail("riya@test.com");
   const acme = await prisma.customer.findFirstOrThrow({ where: { name: "Acme Corp" } });
   const setup = await prisma.product.findFirstOrThrow({ where: { name: "Setup Service" } });
   const q = await prisma.quotation.create({
@@ -62,8 +62,8 @@ afterAll(async () => {
 
 describe("approval service against the database", () => {
   it("Manager then Finance: the quote stays pending after step 1 and is approved after step 2, with an audit row each", async () => {
-    const meera = await userByEmail("meera@df.local");
-    const farhan = await userByEmail("farhan@df.local");
+    const meera = await userByEmail("meera@test.com");
+    const farhan = await userByEmail("farhan@test.com");
     const { q, request, steps } = await pendingQuote(["SALES_MANAGER", "FINANCE"]);
 
     const first = await decide({ requestId: request.id, stepId: steps[0].id, decision: "APPROVE", note: "ok, 8 pp on services" }, meera);
@@ -81,9 +81,9 @@ describe("approval service against the database", () => {
   });
 
   it("Finance cannot act before the Manager step; the rep cannot approve their own quote; a decided step is a 409", async () => {
-    const riya = await userByEmail("riya@df.local");
-    const meera = await userByEmail("meera@df.local");
-    const farhan = await userByEmail("farhan@df.local");
+    const riya = await userByEmail("riya@test.com");
+    const meera = await userByEmail("meera@test.com");
+    const farhan = await userByEmail("farhan@test.com");
     const { request, steps } = await pendingQuote(["SALES_MANAGER", "FINANCE"]);
 
     await expect(decide({ requestId: request.id, stepId: steps[1].id, decision: "APPROVE" }, farhan)).rejects.toBeInstanceOf(ForbiddenError);
@@ -95,8 +95,8 @@ describe("approval service against the database", () => {
   });
 
   it("two simultaneous approvals of the same step: exactly one wins", async () => {
-    const meera = await userByEmail("meera@df.local");
-    const admin = await userByEmail("admin@df.local");
+    const meera = await userByEmail("meera@test.com");
+    const admin = await userByEmail("admin@test.com");
     const { request, steps } = await pendingQuote(["SALES_MANAGER"]);
     const results = await Promise.allSettled([
       decide({ requestId: request.id, stepId: steps[0].id, decision: "APPROVE" }, meera),
@@ -110,7 +110,7 @@ describe("approval service against the database", () => {
   });
 
   it("return for revision sends the quote back to DRAFT with the reason and bumps the approval version", async () => {
-    const meera = await userByEmail("meera@df.local");
+    const meera = await userByEmail("meera@test.com");
     const { q, request, steps } = await pendingQuote(["SALES_MANAGER"]);
     const out = await decide({ requestId: request.id, stepId: steps[0].id, decision: "RETURN", note: "Requested justification" }, meera);
     expect(out.status).toBe("DRAFT");
@@ -121,7 +121,7 @@ describe("approval service against the database", () => {
   });
 
   it("reject marks the request and the quote rejected", async () => {
-    const meera = await userByEmail("meera@df.local");
+    const meera = await userByEmail("meera@test.com");
     const { request, steps } = await pendingQuote(["SALES_MANAGER"]);
     const out = await decide({ requestId: request.id, stepId: steps[0].id, decision: "REJECT", note: "Margin too thin" }, meera);
     expect(out.status).toBe("REJECTED");
@@ -130,9 +130,9 @@ describe("approval service against the database", () => {
   });
 
   it("approving a customer counter-offer applies the proposed discount and returns the quote to the portal (SENT)", async () => {
-    const meera = await userByEmail("meera@df.local");
+    const meera = await userByEmail("meera@test.com");
     const { q, request, steps } = await pendingQuote(["SALES_MANAGER"], true);
-    const contact = await prisma.customerContact.findFirstOrThrow({ where: { email: "buyer@acme.com" } });
+    const contact = await prisma.customerContact.findFirstOrThrow({ where: { email: "acme@test.com" } });
     await prisma.portalRequest.create({
       data: { quotationId: q.id, lineId: q.lines[0].id, contactId: contact.id, type: "COUNTER_DISCOUNT", proposedDiscountBp: 2500, status: "OPEN" },
     });

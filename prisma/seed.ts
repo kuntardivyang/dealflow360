@@ -22,7 +22,7 @@ async function main() {
   const plans = await seedPlans(db);
   await seedQuotes(db, catalogue, customers, plans, users);
   await seedHistory(db, catalogue, customers, users); // B: deal-health histories
-  console.log(`Seed complete in ${Date.now() - started} ms. Logins: *@df.local / demo1234, portal buyer@acme.com / demo1234`);
+  console.log(`Seed complete in ${Date.now() - started} ms. Logins: *@test.com / demo1234, portal acme@test.com / demo1234`);
 }
 
 main()

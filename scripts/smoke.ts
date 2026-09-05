@@ -38,10 +38,10 @@ async function user(email: string): Promise<SessionUser> {
 const inr = (paise: number) => `₹${(paise / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`;
 
 async function main() {
-  const admin = await user("admin@df.local");
-  const riya = await user("riya@df.local");
-  const meera = await user("meera@df.local");
-  const farhan = await user("farhan@df.local");
+  const admin = await user("admin@test.com");
+  const riya = await user("riya@test.com");
+  const meera = await user("meera@test.com");
+  const farhan = await user("farhan@test.com");
   const acme = await db.customer.findFirstOrThrow({ where: { name: "Acme Corp" } });
   const laptop = await db.product.findFirstOrThrow({ where: { sku: "HW-LAP-14" } });
   const setup = await db.product.findFirstOrThrow({ where: { sku: "SV-SETUP" } });
@@ -111,7 +111,7 @@ async function main() {
   });
 
   await step(7, "As the customer, ask for a bigger discount: the quote goes back for approval automatically", async () => {
-    const buyer = await authenticatePortal("buyer@acme.com", "demo1234");
+    const buyer = await authenticatePortal("acme@test.com", "demo1234");
     check(buyer, "portal login failed");
     const setupLine = await db.quotationLine.findFirstOrThrow({ where: { quotationId, productId: setup.id } });
     const dto = await submitRequest({ publicId, type: "COUNTER_DISCOUNT", lineId: setupLine.id, proposedDiscountBp: 2500, message: "Can this be 25%?" }, buyer!);
@@ -132,7 +132,7 @@ async function main() {
 
   let planId = 0;
   await step(5.5, "Customer confirms with one click; the split is proposed and accepted across two warehouses", async () => {
-    const buyer = (await authenticatePortal("buyer@acme.com", "demo1234"))!;
+    const buyer = (await authenticatePortal("acme@test.com", "demo1234"))!;
     const dto = await confirmFromPortal({ publicId, fullName: "Nisha Acme" }, buyer);
     check(dto.status === "Confirmed", `portal status ${dto.status}`);
     const plan = await db.fulfillmentPlan.findFirstOrThrow({ where: { quotationId, status: "PROPOSED" }, include: { lines: { include: { warehouse: true } } } });
