@@ -1,8 +1,8 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// DealFlow360 data model.
+// Conventions: integer primary keys; anything that appears in a URL carries a
+// separate random publicId. Money is integer paise, percentages are integer
+// basis points (1250 = 12.50%). Calendar dates are @db.Date, timestamps are UTC.
+// Code uses camelCase, the database uses snake_case (see @map / @@map).
 
 generator client {
   provider = "prisma-client"
@@ -12,4 +12,952 @@ generator client {
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  SALES_REP
+  SALES_MANAGER
+  FINANCE
+}
+
+enum ProductKind {
+  GOOD
+  SERVICE
+  SUBSCRIPTION
+}
+
+enum BillingInterval {
+  WEEK
+  MONTH
+  QUARTER
+  YEAR
+}
+
+enum ProrationMode {
+  DAY_BASED
+  NONE
+}
+
+enum CancelPolicy {
+  END_OF_PERIOD
+  IMMEDIATE_PRORATED_REFUND
+  NO_REFUND
+}
+
+enum RefundMethod {
+  CREDIT_NOTE
+  REFUND_PAYMENT
+}
+
+enum QuotationStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  SENT
+  UNDER_NEGOTIATION
+  CONFIRMED
+  FULFILLMENT
+  PAID
+  CANCELLED
+}
+
+enum LineType {
+  ONE_TIME
+  RECURRING
+}
+
+enum LineSource {
+  MANUAL
+  UPSELL
+  PORTAL
+}
+
+enum ApprovalRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  RETURNED
+  SUPERSEDED
+}
+
+enum ApprovalStepStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ActorType {
+  USER
+  CONTACT
+  SYSTEM
+}
+
+enum StockMoveType {
+  RESERVE
+  RELEASE
+  SHIP
+  RECEIPT
+  ADJUST
+}
+
+enum FulfillmentPlanStatus {
+  PROPOSED
+  ACCEPTED
+  SUPERSEDED
+}
+
+enum ShipmentStatus {
+  RESERVED
+  SHIPPED
+}
+
+enum PromptStatus {
+  OPEN
+  ACCEPTED
+  DISMISSED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+}
+
+enum ScheduleStatus {
+  SCHEDULED
+  INVOICED
+  CANCELLED
+}
+
+enum SubscriptionChangeType {
+  QUANTITY
+  PLAN
+  CANCEL
+}
+
+enum InvoiceKind {
+  ONE_TIME
+  RECURRING
+  PRORATION
+}
+
+enum InvoiceStatus {
+  POSTED
+  PARTIAL
+  PAID
+  VOID
+}
+
+enum PaymentKind {
+  PAYMENT
+  REFUND
+}
+
+enum CreditNoteStatus {
+  OPEN
+  APPLIED
+  REFUNDED
+}
+
+enum PortalRequestType {
+  COMMENT
+  CHANGE_REQUEST
+  COUNTER_DISCOUNT
+}
+
+enum PortalRequestStatus {
+  OPEN
+  ACCEPTED
+  DECLINED
+  SUPERSEDED
+}
+
+enum AlertType {
+  STALLED
+  DISCOUNT_ANOMALY
+  DELIVERY_SLIPPAGE
+}
+
+// ---------------------------------------------------------------------------
+// Identity: internal users, sessions, customers, portal contacts
+// ---------------------------------------------------------------------------
+
+model User {
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
+  name         String
+  passwordHash String   @map("password_hash")
+  role         Role     @default(SALES_REP)
+  managerId    Int?     @map("manager_id")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  manager       User?          @relation("UserManager", fields: [managerId], references: [id])
+  reports       User[]         @relation("UserManager")
+  sessions      Session[]
+  quotations    Quotation[]    @relation("QuotationRep")
+  approvalSteps ApprovalStep[] @relation("StepActedBy")
+
+  @@map("app_user")
+}
+
+model Session {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  userId    Int      @map("user_id")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model CustomerTier {
+  id                Int      @id @default(autoincrement())
+  name              String   @unique
+  discountCeilingBp Int      @map("discount_ceiling_bp")
+  sortOrder         Int      @default(0) @map("sort_order")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  customers      Customer[]
+  pricelistRules PricelistRule[]
+
+  @@map("customer_tier")
+}
+
+model Customer {
+  id         Int       @id @default(autoincrement())
+  publicId   String    @unique @map("public_id")
+  name       String
+  email      String?
+  city       String?
+  tierId     Int       @map("tier_id")
+  archivedAt DateTime? @map("archived_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  tier          CustomerTier      @relation(fields: [tierId], references: [id])
+  contacts      CustomerContact[]
+  quotations    Quotation[]
+  subscriptions Subscription[]
+  invoices      Invoice[]
+  creditNotes   CreditNote[]
+
+  @@index([tierId])
+  @@map("customer")
+}
+
+model CustomerContact {
+  id           Int      @id @default(autoincrement())
+  customerId   Int      @map("customer_id")
+  email        String   @unique
+  name         String
+  passwordHash String   @map("password_hash")
+  isPrimary    Boolean  @default(true) @map("is_primary")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  customer       Customer           @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  portalSessions PortalSession[]
+  loginTokens    PortalLoginToken[]
+  portalRequests PortalRequest[]
+
+  @@index([customerId])
+  @@map("customer_contact")
+}
+
+model PortalSession {
+  id        Int      @id @default(autoincrement())
+  token     String   @unique
+  contactId Int      @map("contact_id")
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  contact CustomerContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@index([contactId])
+  @@map("portal_session")
+}
+
+model PortalLoginToken {
+  id          Int       @id @default(autoincrement())
+  tokenHash   String    @unique @map("token_hash")
+  contactId   Int       @map("contact_id")
+  quotationId Int?      @map("quotation_id")
+  expiresAt   DateTime  @map("expires_at")
+  usedAt      DateTime? @map("used_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  contact CustomerContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@map("portal_login_token")
+}
+
+// ---------------------------------------------------------------------------
+// Catalogue and pricing
+// ---------------------------------------------------------------------------
+
+model ProductCategory {
+  id                Int      @id @default(autoincrement())
+  name              String   @unique
+  discountCeilingBp Int?     @map("discount_ceiling_bp") // null = only the tier ceiling applies
+  minMarginBp       Int      @default(0) @map("min_margin_bp") // upsell suggestions below this are hidden
+  sortOrder         Int      @default(0) @map("sort_order")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  products       Product[]
+  pricelistRules PricelistRule[]
+
+  @@map("product_category")
+}
+
+model Product {
+  id           Int         @id @default(autoincrement())
+  sku          String      @unique
+  name         String
+  description  String?
+  kind         ProductKind
+  categoryId   Int         @map("category_id")
+  unit         String      @default("Each")
+  listPrice    Int         @map("list_price") // paise, per unit (per period for subscriptions)
+  cost         Int // paise, per unit
+  taxBp        Int         @default(1800) @map("tax_bp")
+  isPromoted   Boolean     @default(false) @map("is_promoted")
+  parentId     Int?        @map("parent_id") // variant of this product
+  variantLabel String?     @map("variant_label") // e.g. "16 inch", "Black"
+  extraPrice   Int         @default(0) @map("extra_price") // paise added to the parent's list price
+  archivedAt   DateTime?   @map("archived_at")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  category       ProductCategory  @relation(fields: [categoryId], references: [id])
+  parent         Product?         @relation("ProductVariant", fields: [parentId], references: [id])
+  variants       Product[]        @relation("ProductVariant")
+  pricelistRules PricelistRule[]
+  pairings       ProductPairing[] @relation("PairingFrom")
+  pairedWith     ProductPairing[] @relation("PairingTo")
+  plans          RecurringPlan[]
+  quotationLines QuotationLine[]
+  stockLevels    StockLevel[]
+  subscriptions  Subscription[]
+
+  @@index([categoryId])
+  @@index([parentId])
+  @@map("product")
+}
+
+// Tier based price rule. Scope is the narrowest non-null of product, category, tier.
+model PricelistRule {
+  id         Int      @id @default(autoincrement())
+  tierId     Int      @map("tier_id")
+  categoryId Int?     @map("category_id")
+  productId  Int?     @map("product_id")
+  discountBp Int      @map("discount_bp")
+  currency   String   @default("INR")
+  note       String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  tier     CustomerTier     @relation(fields: [tierId], references: [id], onDelete: Cascade)
+  category ProductCategory? @relation(fields: [categoryId], references: [id])
+  product  Product?         @relation(fields: [productId], references: [id])
+
+  @@index([tierId])
+  @@map("pricelist_rule")
+}
+
+// Historical co-purchase counts feeding the upsell ranking.
+model ProductPairing {
+  id              Int @id @default(autoincrement())
+  productId       Int @map("product_id")
+  pairedProductId Int @map("paired_product_id")
+  coCount         Int @map("co_count")
+
+  product Product @relation("PairingFrom", fields: [productId], references: [id], onDelete: Cascade)
+  paired  Product @relation("PairingTo", fields: [pairedProductId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, pairedProductId])
+  @@map("product_pairing")
+}
+
+// ---------------------------------------------------------------------------
+// Governance configuration: approval chains and the risk score
+// ---------------------------------------------------------------------------
+
+// One row per trigger; routing takes the longest chain among fired rules.
+model ApprovalRule {
+  id                Int      @id @default(autoincrement())
+  sequence          Int      @unique
+  name              String
+  minScore          Int      @map("min_score") // 0..100
+  maxWorstOverageBp Int?     @map("max_worst_overage_bp") // fires when worst overage exceeds this
+  maxOrderTotal     Int?     @map("max_order_total") // paise; fires when the order total exceeds this
+  chain             Json // ordered Role[] e.g. ["SALES_MANAGER","FINANCE"]
+  isActive          Boolean  @default(true) @map("is_active")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@map("approval_rule")
+}
+
+// Singleton (id = 1). Weights are integer percent, normalisers are basis points.
+model RiskConfig {
+  id            Int      @id @default(1)
+  wWorst        Int      @default(50) @map("w_worst")
+  wBlended      Int      @default(40) @map("w_blended")
+  wMargin       Int      @default(10) @map("w_margin")
+  normWorstBp   Int      @default(1000) @map("norm_worst_bp")
+  normBlendedBp Int      @default(500) @map("norm_blended_bp")
+  normMarginBp  Int      @default(1000) @map("norm_margin_bp")
+  floorMarginBp Int      @default(2000) @map("floor_margin_bp")
+  stalledDays   Int      @default(3) @map("stalled_days")
+  anomalyZ      Float    @default(2.0) @map("anomaly_z")
+  anomalyAbsBp  Int      @default(1000) @map("anomaly_abs_bp")
+  minHistory    Int      @default(5) @map("min_history")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  updatedById   Int?     @map("updated_by_id")
+
+  @@map("risk_config")
+}
+
+// Named counters for human readable numbers (Q-2026-0001, INV-2026-0001).
+model Counter {
+  key   String @id
+  value Int    @default(0)
+
+  @@map("counter")
+}
+
+// ---------------------------------------------------------------------------
+// Quotation, approval and audit
+// ---------------------------------------------------------------------------
+
+model Quotation {
+  id                   Int             @id @default(autoincrement())
+  publicId             String          @unique @map("public_id")
+  number               String          @unique
+  customerId           Int             @map("customer_id")
+  repUserId            Int             @map("rep_user_id")
+  status               QuotationStatus @default(DRAFT)
+  currency             String          @default("INR")
+  orderDiscountBp      Int             @default(0) @map("order_discount_bp")
+  grossTotal           Int             @default(0) @map("gross_total") // sum of qty x unit price
+  discountTotal        Int             @default(0) @map("discount_total")
+  netTotal             Int             @default(0) @map("net_total") // after discounts, before tax
+  taxTotal             Int             @default(0) @map("tax_total")
+  total                Int             @default(0) // net + tax
+  costTotal            Int             @default(0) @map("cost_total")
+  marginBp             Int?            @map("margin_bp") // null when net is 0
+  riskScore            Int?            @map("risk_score") // 0..100
+  riskBreakdown        Json?           @map("risk_breakdown")
+  approvalVersion      Int             @default(1) @map("approval_version")
+  version              Int             @default(1) // optimistic concurrency
+  negotiationPending   Boolean         @default(false) @map("negotiation_pending")
+  promisedDate         DateTime?       @map("promised_date") @db.Date
+  notes                String?
+  sentAt               DateTime?       @map("sent_at")
+  confirmedAt          DateTime?       @map("confirmed_at")
+  confirmedByContactId Int?            @map("confirmed_by_contact_id")
+  confirmedName        String?         @map("confirmed_name")
+  lastActivityAt       DateTime        @default(now()) @map("last_activity_at")
+  createdAt            DateTime        @default(now()) @map("created_at")
+  updatedAt            DateTime        @updatedAt @map("updated_at")
+
+  customer         Customer          @relation(fields: [customerId], references: [id])
+  rep              User              @relation("QuotationRep", fields: [repUserId], references: [id])
+  lines            QuotationLine[]
+  approvalRequests ApprovalRequest[]
+  auditLogs        AuditLog[]
+  fulfillmentPlans FulfillmentPlan[]
+  subscriptions    Subscription[]
+  invoices         Invoice[]
+  portalRequests   PortalRequest[]
+  alerts           DealAlert[]
+
+  @@index([status])
+  @@index([repUserId, lastActivityAt])
+  @@index([customerId])
+  @@map("quotation")
+}
+
+// Every price input is snapshotted on the line so history survives catalogue edits.
+model QuotationLine {
+  id                  Int        @id @default(autoincrement())
+  quotationId         Int        @map("quotation_id")
+  productId           Int        @map("product_id")
+  planId              Int?       @map("plan_id") // recurring lines only
+  lineType            LineType   @default(ONE_TIME) @map("line_type")
+  source              LineSource @default(MANUAL)
+  description         String
+  qty                 Int
+  unitPrice           Int        @map("unit_price") // paise, after pricelist rule
+  unitCost            Int        @map("unit_cost")
+  taxBp               Int        @map("tax_bp")
+  discountBp          Int        @default(0) @map("discount_bp") // line level discount
+  effectiveDiscountBp Int        @default(0) @map("effective_discount_bp") // line combined with order discount
+  ceilingBp           Int        @map("ceiling_bp") // min(tier ceiling, category ceiling) at creation
+  pricelistRuleId     Int?       @map("pricelist_rule_id")
+  gross               Int        @default(0)
+  discountAmount      Int        @default(0) @map("discount_amount")
+  net                 Int        @default(0)
+  tax                 Int        @default(0)
+  total               Int        @default(0)
+  sortOrder           Int        @default(0) @map("sort_order")
+  createdAt           DateTime   @default(now()) @map("created_at")
+  updatedAt           DateTime   @updatedAt @map("updated_at")
+
+  quotation        Quotation         @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  product          Product           @relation(fields: [productId], references: [id])
+  plan             RecurringPlan?    @relation(fields: [planId], references: [id])
+  fulfillmentLines FulfillmentLine[]
+  subscription     Subscription?
+  portalRequests   PortalRequest[]
+  invoiceLines     InvoiceLine[]
+
+  @@index([quotationId])
+  @@index([productId])
+  @@map("quotation_line")
+}
+
+model ApprovalRequest {
+  id            Int                   @id @default(autoincrement())
+  quotationId   Int                   @map("quotation_id")
+  version       Int // equals Quotation.approvalVersion at creation
+  status        ApprovalRequestStatus @default(PENDING)
+  riskScore     Int                   @map("risk_score")
+  riskBreakdown Json                  @map("risk_breakdown")
+  chain         Json // Role[] required, in order
+  reason        String? // reject / return reason
+  createdAt     DateTime              @default(now()) @map("created_at")
+  resolvedAt    DateTime?             @map("resolved_at")
+
+  quotation Quotation      @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  steps     ApprovalStep[]
+
+  @@unique([quotationId, version])
+  @@index([status])
+  @@map("approval_request")
+}
+
+model ApprovalStep {
+  id           Int                @id @default(autoincrement())
+  requestId    Int                @map("request_id")
+  stepNo       Int                @map("step_no")
+  requiredRole Role               @map("required_role")
+  status       ApprovalStepStatus @default(PENDING)
+  actedById    Int?               @map("acted_by_id")
+  actedAt      DateTime?          @map("acted_at")
+  note         String?
+
+  request ApprovalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  actedBy User?           @relation("StepActedBy", fields: [actedById], references: [id])
+
+  @@unique([requestId, stepNo])
+  @@map("approval_step")
+}
+
+// Append-only. Written inside the same transaction as the change it records.
+model AuditLog {
+  id          Int       @id @default(autoincrement())
+  entityType  String    @map("entity_type")
+  entityId    Int       @map("entity_id")
+  quotationId Int?      @map("quotation_id")
+  action      String
+  actorType   ActorType @map("actor_type")
+  actorId     Int?      @map("actor_id")
+  actorName   String    @map("actor_name")
+  actorRole   String?   @map("actor_role")
+  reason      String?
+  beforeJson  Json?     @map("before_json")
+  afterJson   Json?     @map("after_json")
+  at          DateTime  @default(now())
+
+  quotation Quotation? @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+
+  @@index([quotationId, at])
+  @@index([entityType, entityId, at])
+  @@map("audit_log")
+}
+
+// ---------------------------------------------------------------------------
+// Inventory and fulfillment
+// ---------------------------------------------------------------------------
+
+model Warehouse {
+  id             Int       @id @default(autoincrement())
+  name           String    @unique
+  city           String?
+  shipCostWeight Int       @map("ship_cost_weight") // paise per shipment, used by the split tie-break
+  priority       Int       @default(100)
+  archivedAt     DateTime? @map("archived_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  stockLevels      StockLevel[]
+  shipments        Shipment[]
+  fulfillmentLines FulfillmentLine[]
+
+  @@map("warehouse")
+}
+
+// available = on_hand - reserved. CHECK constraints keep both non-negative.
+model StockLevel {
+  id           Int      @id @default(autoincrement())
+  warehouseId  Int      @map("warehouse_id")
+  productId    Int      @map("product_id")
+  onHand       Int      @default(0) @map("on_hand")
+  reserved     Int      @default(0)
+  reorderPoint Int      @default(0) @map("reorder_point")
+  leadDays     Int      @default(7) @map("lead_days")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  warehouse Warehouse   @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  product   Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+  moves     StockMove[]
+
+  @@unique([warehouseId, productId])
+  @@map("stock_level")
+}
+
+model StockMove {
+  id           Int           @id @default(autoincrement())
+  stockLevelId Int           @map("stock_level_id")
+  type         StockMoveType
+  qty          Int // signed effect is implied by type
+  quotationId  Int?          @map("quotation_id")
+  shipmentId   Int?          @map("shipment_id")
+  note         String?
+  createdById  Int?          @map("created_by_id")
+  createdAt    DateTime      @default(now()) @map("created_at")
+
+  stockLevel StockLevel @relation(fields: [stockLevelId], references: [id], onDelete: Cascade)
+
+  @@index([stockLevelId, createdAt])
+  @@map("stock_move")
+}
+
+model FulfillmentPlan {
+  id            Int                   @id @default(autoincrement())
+  quotationId   Int                   @map("quotation_id")
+  status        FulfillmentPlanStatus @default(PROPOSED)
+  isManual      Boolean               @default(false) @map("is_manual")
+  shipmentCount Int                   @default(0) @map("shipment_count")
+  estCost       Int                   @default(0) @map("est_cost")
+  reason        String? // required for manual override
+  createdById   Int?                  @map("created_by_id")
+  acceptedById  Int?                  @map("accepted_by_id")
+  acceptedAt    DateTime?             @map("accepted_at")
+  createdAt     DateTime              @default(now()) @map("created_at")
+
+  quotation Quotation           @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  lines     FulfillmentLine[]
+  shipments Shipment[]
+  prompts   FulfillmentPrompt[]
+
+  @@index([quotationId])
+  @@map("fulfillment_plan")
+}
+
+// One shipment per warehouse per accepted plan.
+model Shipment {
+  id          Int            @id @default(autoincrement())
+  planId      Int            @map("plan_id")
+  warehouseId Int            @map("warehouse_id")
+  status      ShipmentStatus @default(RESERVED)
+  shipCost    Int            @default(0) @map("ship_cost")
+  shippedAt   DateTime?      @map("shipped_at")
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  plan      FulfillmentPlan   @relation(fields: [planId], references: [id], onDelete: Cascade)
+  warehouse Warehouse         @relation(fields: [warehouseId], references: [id])
+  lines     FulfillmentLine[]
+
+  @@index([planId])
+  @@map("shipment")
+}
+
+// warehouseId null = backorder for that quantity.
+model FulfillmentLine {
+  id              Int       @id @default(autoincrement())
+  planId          Int       @map("plan_id")
+  quotationLineId Int       @map("quotation_line_id")
+  warehouseId     Int?      @map("warehouse_id")
+  shipmentId      Int?      @map("shipment_id")
+  qty             Int
+  isBackorder     Boolean   @default(false) @map("is_backorder")
+  expectedDate    DateTime? @map("expected_date") @db.Date
+
+  plan          FulfillmentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  quotationLine QuotationLine   @relation(fields: [quotationLineId], references: [id], onDelete: Cascade)
+  warehouse     Warehouse?      @relation(fields: [warehouseId], references: [id])
+  shipment      Shipment?       @relation(fields: [shipmentId], references: [id])
+
+  @@index([planId])
+  @@map("fulfillment_line")
+}
+
+// "Consolidate remaining backorder" prompt raised when stock arrives mid fulfillment.
+model FulfillmentPrompt {
+  id         Int          @id @default(autoincrement())
+  planId     Int          @map("plan_id")
+  type       String       @default("CONSOLIDATE_BACKORDER")
+  message    String
+  payload    Json?
+  status     PromptStatus @default(OPEN)
+  createdAt  DateTime     @default(now()) @map("created_at")
+  resolvedAt DateTime?    @map("resolved_at")
+
+  plan FulfillmentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([planId, status])
+  @@map("fulfillment_prompt")
+}
+
+// ---------------------------------------------------------------------------
+// Subscriptions and billing
+// ---------------------------------------------------------------------------
+
+model RecurringPlan {
+  id            Int             @id @default(autoincrement())
+  name          String          @unique
+  interval      BillingInterval
+  periods       Int             @default(12) // schedule horizon materialised on confirm
+  prorationMode ProrationMode   @default(DAY_BASED) @map("proration_mode")
+  billChangeDay Boolean         @default(true) @map("bill_change_day")
+  cancelPolicy  CancelPolicy    @default(IMMEDIATE_PRORATED_REFUND) @map("cancel_policy")
+  refundMethod  RefundMethod    @default(CREDIT_NOTE) @map("refund_method")
+  productId     Int?            @map("product_id") // null = usable with any subscription product
+  archivedAt    DateTime?       @map("archived_at")
+  createdAt     DateTime        @default(now()) @map("created_at")
+
+  product        Product?        @relation(fields: [productId], references: [id])
+  quotationLines QuotationLine[]
+  subscriptions  Subscription[]
+
+  @@map("recurring_plan")
+}
+
+model Subscription {
+  id                 Int                @id @default(autoincrement())
+  publicId           String             @unique @map("public_id")
+  customerId         Int                @map("customer_id")
+  quotationId        Int?               @map("quotation_id")
+  quotationLineId    Int?               @unique @map("quotation_line_id")
+  productId          Int                @map("product_id")
+  planId             Int                @map("plan_id")
+  qty                Int
+  unitPrice          Int                @map("unit_price") // paise per unit per period
+  discountBp         Int                @default(0) @map("discount_bp")
+  taxBp              Int                @map("tax_bp")
+  status             SubscriptionStatus @default(ACTIVE)
+  anchorDate         DateTime           @map("anchor_date") @db.Date
+  currentPeriodStart DateTime           @map("current_period_start") @db.Date
+  currentPeriodEnd   DateTime           @map("current_period_end") @db.Date
+  cancelledAt        DateTime?          @map("cancelled_at")
+  cancelEffective    DateTime?          @map("cancel_effective") @db.Date
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  customer      Customer             @relation(fields: [customerId], references: [id])
+  quotation     Quotation?           @relation(fields: [quotationId], references: [id])
+  quotationLine QuotationLine?       @relation(fields: [quotationLineId], references: [id])
+  product       Product              @relation(fields: [productId], references: [id])
+  plan          RecurringPlan        @relation(fields: [planId], references: [id])
+  schedule      BillingSchedule[]
+  changes       SubscriptionChange[]
+  invoices      Invoice[]
+  creditNotes   CreditNote[]
+
+  @@index([customerId])
+  @@index([status])
+  @@map("subscription")
+}
+
+model BillingSchedule {
+  id             Int            @id @default(autoincrement())
+  subscriptionId Int            @map("subscription_id")
+  periodStart    DateTime       @map("period_start") @db.Date
+  periodEnd      DateTime       @map("period_end") @db.Date
+  billDate       DateTime       @map("bill_date") @db.Date
+  net            Int
+  tax            Int
+  total          Int
+  status         ScheduleStatus @default(SCHEDULED)
+  invoiceId      Int?           @map("invoice_id")
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  invoice      Invoice?     @relation(fields: [invoiceId], references: [id])
+
+  @@index([subscriptionId, periodStart])
+  @@map("billing_schedule")
+}
+
+model SubscriptionChange {
+  id             Int                    @id @default(autoincrement())
+  subscriptionId Int                    @map("subscription_id")
+  type           SubscriptionChangeType
+  effectiveDate  DateTime               @map("effective_date") @db.Date
+  oldQty         Int?                   @map("old_qty")
+  newQty         Int?                   @map("new_qty")
+  daysInPeriod   Int?                   @map("days_in_period")
+  remainingDays  Int?                   @map("remaining_days")
+  credit         Int                    @default(0)
+  charge         Int                    @default(0)
+  net            Int                    @default(0) // charge - credit
+  invoiceId      Int?                   @map("invoice_id")
+  creditNoteId   Int?                   @map("credit_note_id")
+  note           String?
+  createdById    Int?                   @map("created_by_id")
+  createdAt      DateTime               @default(now()) @map("created_at")
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+  @@map("subscription_change")
+}
+
+model Invoice {
+  id             Int           @id @default(autoincrement())
+  publicId       String        @unique @map("public_id")
+  number         String        @unique
+  kind           InvoiceKind
+  customerId     Int           @map("customer_id")
+  quotationId    Int?          @map("quotation_id")
+  subscriptionId Int?          @map("subscription_id")
+  status         InvoiceStatus @default(POSTED)
+  subtotal       Int           @default(0) // net of discounts, before tax
+  taxTotal       Int           @default(0) @map("tax_total")
+  total          Int           @default(0)
+  paidAmount     Int           @default(0) @map("paid_amount")
+  issueDate      DateTime      @map("issue_date") @db.Date
+  dueDate        DateTime      @map("due_date") @db.Date
+  periodStart    DateTime?     @map("period_start") @db.Date
+  periodEnd      DateTime?     @map("period_end") @db.Date
+  paidAt         DateTime?     @map("paid_at")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  customer     Customer          @relation(fields: [customerId], references: [id])
+  quotation    Quotation?        @relation(fields: [quotationId], references: [id])
+  subscription Subscription?     @relation(fields: [subscriptionId], references: [id])
+  lines        InvoiceLine[]
+  payments     Payment[]
+  schedule     BillingSchedule[]
+  creditNotes  CreditNote[]      @relation("CreditNoteInvoice")
+  appliedNotes CreditNote[]      @relation("CreditNoteApplied")
+
+  @@index([quotationId])
+  @@index([customerId])
+  @@index([status])
+  @@map("invoice")
+}
+
+model InvoiceLine {
+  id              Int    @id @default(autoincrement())
+  invoiceId       Int    @map("invoice_id")
+  quotationLineId Int?   @map("quotation_line_id")
+  description     String
+  qty             Int
+  unitPrice       Int    @map("unit_price")
+  discountBp      Int    @default(0) @map("discount_bp")
+  net             Int // may be negative on proration credit lines
+  taxBp           Int    @map("tax_bp")
+  tax             Int
+  total           Int
+  sortOrder       Int    @default(0) @map("sort_order")
+
+  invoice       Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  quotationLine QuotationLine? @relation(fields: [quotationLineId], references: [id])
+
+  @@index([invoiceId])
+  @@map("invoice_line")
+}
+
+model CreditNote {
+  id                 Int              @id @default(autoincrement())
+  number             String           @unique
+  customerId         Int              @map("customer_id")
+  invoiceId          Int?             @map("invoice_id") // invoice being credited
+  subscriptionId     Int?             @map("subscription_id")
+  amount             Int // paise, positive
+  reason             String
+  status             CreditNoteStatus @default(OPEN)
+  appliedToInvoiceId Int?             @map("applied_to_invoice_id")
+  createdAt          DateTime         @default(now()) @map("created_at")
+
+  customer     Customer      @relation(fields: [customerId], references: [id])
+  invoice      Invoice?      @relation("CreditNoteInvoice", fields: [invoiceId], references: [id])
+  appliedTo    Invoice?      @relation("CreditNoteApplied", fields: [appliedToInvoiceId], references: [id])
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id])
+
+  @@map("credit_note")
+}
+
+// Append-only. clientRef is generated by the client so a retried request is a no-op.
+model Payment {
+  id          Int         @id @default(autoincrement())
+  invoiceId   Int         @map("invoice_id")
+  kind        PaymentKind @default(PAYMENT)
+  amount      Int // paise, positive
+  method      String      @default("BANK_TRANSFER")
+  clientRef   String      @unique @map("client_ref")
+  reference   String?
+  note        String?
+  receivedAt  DateTime    @default(now()) @map("received_at")
+  createdById Int?        @map("created_by_id")
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+
+  @@index([invoiceId])
+  @@map("payment")
+}
+
+// ---------------------------------------------------------------------------
+// Portal negotiation and deal health
+// ---------------------------------------------------------------------------
+
+model PortalRequest {
+  id                    Int                 @id @default(autoincrement())
+  quotationId           Int                 @map("quotation_id")
+  lineId                Int?                @map("line_id")
+  contactId             Int                 @map("contact_id")
+  type                  PortalRequestType
+  message               String?
+  proposedDiscountBp    Int?                @map("proposed_discount_bp")
+  requestedDeliveryDate DateTime?           @map("requested_delivery_date") @db.Date
+  status                PortalRequestStatus @default(OPEN)
+  responseNote          String?             @map("response_note")
+  respondedById         Int?                @map("responded_by_id")
+  respondedAt           DateTime?           @map("responded_at")
+  createdAt             DateTime            @default(now()) @map("created_at")
+
+  quotation Quotation       @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  line      QuotationLine?  @relation(fields: [lineId], references: [id], onDelete: SetNull)
+  contact   CustomerContact @relation(fields: [contactId], references: [id])
+
+  @@index([quotationId, status])
+  @@map("portal_request")
+}
+
+model DealAlert {
+  id           Int       @id @default(autoincrement())
+  quotationId  Int       @map("quotation_id")
+  type         AlertType
+  severity     Int       @default(1)
+  message      String
+  payload      Json?
+  firstSeenAt  DateTime  @default(now()) @map("first_seen_at")
+  lastSeenAt   DateTime  @default(now()) @map("last_seen_at")
+  resolvedAt   DateTime? @map("resolved_at")
+  lastNudgedAt DateTime? @map("last_nudged_at")
+  escalatedAt  DateTime? @map("escalated_at")
+
+  quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+
+  @@index([quotationId, type])
+  @@index([resolvedAt])
+  @@map("deal_alert")
 }
