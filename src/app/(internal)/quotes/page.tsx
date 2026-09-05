@@ -9,7 +9,7 @@ import { QUOTATION_STATUS_LABEL, type QuotationStatus } from "@/lib/contract";
 import { prisma } from "@/lib/db";
 import { formatBp, formatDateTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { createQuotationAndOpen } from "../actions/quotation";
+import { createCustomerAndQuote, createQuotationAndOpen } from "../actions/quotation";
 
 export const metadata = { title: "Quotations" };
 export const dynamic = "force-dynamic";
@@ -23,7 +23,7 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
   const filter = CHIPS.find((s) => s === sp.status);
   const table = sp.view === "table";
 
-  const [quotes, counts, customers] = await Promise.all([
+  const [quotes, counts, customers, tiers] = await Promise.all([
     prisma.quotation.findMany({
       where: filter ? { status: filter } : undefined,
       include: { customer: { select: { name: true } }, rep: { select: { name: true } } },
@@ -32,6 +32,7 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
     }),
     prisma.quotation.groupBy({ by: ["status"], _count: { _all: true } }),
     prisma.customer.findMany({ where: { archivedAt: null }, orderBy: { name: "asc" }, include: { tier: { select: { name: true } } } }),
+    prisma.customerTier.findMany({ orderBy: { sortOrder: "asc" } }),
   ]);
   const total = counts.reduce((n, c) => n + c._count._all, 0);
   const countOf = (s: QuotationStatus) => counts.find((c) => c.status === s)?._count._all ?? 0;
@@ -93,6 +94,27 @@ export default async function QuotationsPage({ searchParams }: { searchParams: P
       />
 
       {sp.error ? <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{sp.error}</p> : null}
+
+      <details className="rounded-xl border bg-card px-4 py-3 text-sm">
+        <summary className="cursor-pointer font-medium">New customer</summary>
+        <form action={createCustomerAndQuote} className="mt-3 grid gap-2 sm:grid-cols-5">
+          <input name="name" required placeholder="Company name" className="h-9 rounded-md border bg-background px-2 sm:col-span-2" aria-label="Company name" />
+          <select name="tierId" required className="h-9 rounded-md border bg-background px-2" aria-label="Tier" defaultValue={tiers[0]?.id}>
+            {tiers.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name} tier
+              </option>
+            ))}
+          </select>
+          <input name="city" placeholder="City" className="h-9 rounded-md border bg-background px-2" aria-label="City" />
+          <input name="contactName" required placeholder="Contact name" className="h-9 rounded-md border bg-background px-2" aria-label="Contact name" />
+          <input name="contactEmail" type="email" required placeholder="Contact email (portal login)" className="h-9 rounded-md border bg-background px-2 sm:col-span-3" aria-label="Contact email" />
+          <Button type="submit" variant="outline" className="sm:col-span-2">
+            Create customer and start a quotation
+          </Button>
+          <p className="text-xs text-muted-foreground sm:col-span-5">The contact can log in to the portal with this email and the password demo1234.</p>
+        </form>
+      </details>
 
       <div className="flex flex-wrap gap-2" data-print-hide>
         <Link href={href({ status: null })} className={chip(!filter)}>
