@@ -3,7 +3,7 @@ import type { SessionUser } from "@/lib/contract";
 import { ROLE_LABEL } from "@/lib/labels";
 import { initials } from "@/lib/format";
 
-/** Who is signed in, with their role. Shows a sign-in link until auth lands. */
+/** Who is signed in, with their role. */
 export function UserChip({ user }: { user: SessionUser | null }) {
   if (!user) {
     return (
