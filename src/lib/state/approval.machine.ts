@@ -5,7 +5,7 @@ import { assertMove } from "./machine";
 
 export const REQUEST_TRANSITIONS: Record<ApprovalRequestStatus, readonly ApprovalRequestStatus[]> = {
   PENDING: ["APPROVED", "REJECTED", "RETURNED", "SUPERSEDED"],
-  APPROVED: [],
+  APPROVED: ["SUPERSEDED"], // the approved terms changed (edit or customer counter): a new round replaces this one
   REJECTED: [],
   RETURNED: [],
   SUPERSEDED: [],
