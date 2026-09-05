@@ -13,7 +13,7 @@ export function chainLabel(chain: readonly string[]): string {
 
 export function RiskCard({ risk, hasLines }: { risk: RiskPreview | null; hasLines: boolean }) {
   return (
-    <Card>
+    <Card data-print-hide>
       <CardHeader>
         <CardTitle className="text-base">Approval preview</CardTitle>
       </CardHeader>
@@ -23,13 +23,13 @@ export function RiskCard({ risk, hasLines }: { risk: RiskPreview | null; hasLine
         ) : (
           <>
             <div className="flex items-center gap-3">
-              <span className="text-3xl font-semibold tabular-nums">{risk.score}</span>
+              <span className="font-heading text-[34px] leading-none font-bold tracking-[-0.03em] tabular-nums">{risk.score}</span>
               <div>
                 <p className="text-xs text-muted-foreground">Blended risk / 100</p>
                 <StatusBadge status={risk.band} />
               </div>
             </div>
-            <dl className="grid grid-cols-2 gap-y-1 tabular-nums">
+            <dl className="grid grid-cols-2 gap-y-1.5 border-t pt-3 tabular-nums">
               <dt className="text-muted-foreground">Worst line overage</dt>
               <dd className="text-right">{formatPoints(risk.worstOverageBp)}</dd>
               <dt className="text-muted-foreground">Blended overage</dt>

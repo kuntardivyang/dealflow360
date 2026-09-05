@@ -9,9 +9,9 @@ export default async function SignupPage() {
   if (await getSessionUser()) redirect("/dashboard");
   return (
     <>
-      <div className="mb-6 space-y-1">
-        <h1 className="font-heading text-xl font-semibold">Create your account</h1>
-        <p className="text-sm text-muted-foreground">For internal users. Customer access comes from the quotation link your rep sends.</p>
+      <div className="mb-7">
+        <h1 className="font-heading text-[28px] leading-tight font-bold tracking-[-0.02em]">Create your account</h1>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">For internal users. Customer access comes from the quotation link your rep sends.</p>
       </div>
       <AuthForm mode="signup" action={signupAction} />
     </>

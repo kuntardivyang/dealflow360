@@ -133,6 +133,7 @@ export function EntityForm({
                 </Label>
                 <textarea
                   id={id}
+                  name={f.name}
                   value={String(raw[f.name] ?? "")}
                   onChange={(e) => set(f.name, e.target.value)}
                   placeholder={f.placeholder}
@@ -141,7 +142,7 @@ export function EntityForm({
               </>
             ) : f.type === "checkbox" ? (
               <label className="flex h-8 items-center gap-2 text-sm">
-                <input type="checkbox" checked={Boolean(raw[f.name])} onChange={(e) => set(f.name, e.target.checked)} className="size-4 accent-primary" />
+                <input type="checkbox" name={f.name} checked={Boolean(raw[f.name])} onChange={(e) => set(f.name, e.target.checked)} className="size-4 accent-primary" />
                 {f.label}
               </label>
             ) : f.type === "roles" ? (
@@ -171,6 +172,8 @@ export function EntityForm({
                 </Label>
                 <select
                   id={id}
+                  name={f.name}
+                  aria-label={f.label}
                   value={String(raw[f.name] ?? "")}
                   onChange={(e) => set(f.name, e.target.value)}
                   aria-invalid={!!err}
@@ -192,6 +195,8 @@ export function EntityForm({
                 </Label>
                 <Input
                   id={id}
+                  name={f.name}
+                  aria-label={f.label}
                   type={f.type === "text" ? "text" : "number"}
                   inputMode={f.type === "text" ? undefined : "decimal"}
                   step={f.step ?? (f.type === "text" ? undefined : f.type === "number" ? 1 : 0.5)}

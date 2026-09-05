@@ -62,13 +62,13 @@ export default async function WarehousesPage() {
           ) : (
             <Table>
               <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="px-4">Warehouse</TableHead>
-                  <TableHead>Product</TableHead>
-                  <TableHead className="text-right">In Stock</TableHead>
-                  <TableHead className="text-right">Reserved</TableHead>
-                  <TableHead className="text-right">Available</TableHead>
-                  <TableHead className="px-4">Edit</TableHead>
+                <TableRow className="border-b-foreground/10 bg-muted/50 hover:bg-muted/50">
+                  <TableHead className="col-label h-9 px-4">Warehouse</TableHead>
+                  <TableHead className="col-label h-9">Product</TableHead>
+                  <TableHead className="col-label h-9 text-right">In Stock</TableHead>
+                  <TableHead className="col-label h-9 text-right">Reserved</TableHead>
+                  <TableHead className="col-label h-9 text-right">Available</TableHead>
+                  <TableHead className="col-label h-9 px-4">Edit</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

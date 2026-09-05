@@ -28,7 +28,7 @@ export function ClickableRow({ href, children, className }: { href: string; chil
       onClick={onClick}
       onKeyDown={onKeyDown}
       onMouseEnter={() => router.prefetch(href)}
-      className={cn("cursor-pointer outline-none focus-visible:bg-muted/60", className)}
+      className={cn("cursor-pointer outline-none focus-visible:bg-accent/60 focus-visible:shadow-[inset_0_0_0_2px_var(--ring)]", className)}
     >
       {children}
     </TableRow>

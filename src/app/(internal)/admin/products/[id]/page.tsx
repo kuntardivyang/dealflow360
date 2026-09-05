@@ -85,12 +85,12 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             {product.variants.length ? (
               <Table>
                 <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead>Value</TableHead>
-                    <TableHead>SKU</TableHead>
-                    <TableHead className="text-right">Extra price</TableHead>
-                    <TableHead className="text-right">Price</TableHead>
-                    <TableHead>Status</TableHead>
+                  <TableRow className="border-b-foreground/10 bg-muted/50 hover:bg-muted/50">
+                    <TableHead className="col-label h-9">Value</TableHead>
+                    <TableHead className="col-label h-9">SKU</TableHead>
+                    <TableHead className="col-label h-9 text-right">Extra price</TableHead>
+                    <TableHead className="col-label h-9 text-right">Price</TableHead>
+                    <TableHead className="col-label h-9">Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

@@ -13,12 +13,12 @@ export function UserChip({ user }: { user: SessionUser | null }) {
     );
   }
   return (
-    <div className="flex items-center gap-2" title={user.email}>
-      <span className="flex size-7 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+    <div className="flex items-center gap-2.5" title={user.email}>
+      <span className="flex size-8 items-center justify-center rounded-full bg-ink font-heading text-xs font-bold tracking-wide text-ink-foreground">
         {initials(user.name)}
       </span>
-      <span className="hidden leading-tight lg:block">
-        <span className="block text-sm font-medium">{user.name}</span>
+      <span className="hidden shrink-0 leading-tight whitespace-nowrap xl:block">
+        <span className="block text-sm font-semibold">{user.name}</span>
         <span className="block text-xs text-muted-foreground">{ROLE_LABEL[user.role]}</span>
       </span>
     </div>

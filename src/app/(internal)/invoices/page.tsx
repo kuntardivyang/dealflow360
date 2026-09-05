@@ -18,7 +18,7 @@ export default async function InvoicesPage() {
 
   type Row = (typeof invoices)[number];
   const columns: Column<Row>[] = [
-    { key: "number", header: "Invoice #", cell: (i) => <span className="font-medium">{i.number}</span> },
+    { key: "number", header: "Invoice #", cell: (i) => <span className="font-semibold tabular-nums">{i.number}</span> },
     { key: "customer", header: "Customer", cell: (i) => i.customer.name },
     { key: "kind", header: "Type", cell: (i) => KIND_LABEL[i.kind] },
     { key: "total", header: "Amount", align: "right", cell: (i) => <Money paise={i.total} /> },
@@ -30,7 +30,7 @@ export default async function InvoicesPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Invoices" description="Every invoice generated from one-time and recurring orders. Click a row to record a payment." />
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-3">
         <StatTile label="Unpaid" value={String(unpaid)} caption="posted or partially paid" />
         <StatTile label="Paid" value={String(paid)} caption="fully settled" />
         <StatTile label="Balance due" value={<Money paise={due} />} caption="across all open invoices" />

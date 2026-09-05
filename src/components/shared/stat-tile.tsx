@@ -1,9 +1,12 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-/** Dashboard tile: a label, a big number and a caption. Optional link wraps the card. */
+/**
+ * KPI tile: a small label, a big Manrope number and a one-line caption. The tone
+ * colours the number only (colour means state); a thin bar on the left edge repeats it
+ * so the tile still reads on a projector. Optional link wraps the whole tile.
+ */
 export function StatTile({
   label,
   value,
@@ -25,22 +28,27 @@ export function StatTile({
     danger: "text-destructive",
     success: "text-success",
   }[tone];
+  const barClass = {
+    default: "bg-link/70",
+    warning: "bg-warning",
+    danger: "bg-destructive",
+    success: "bg-success",
+  }[tone];
 
-  const card = (
-    <Card size="sm" className={cn("h-full transition-shadow", href && "hover:ring-foreground/20", className)}>
-      <CardHeader>
-        <CardDescription>{label}</CardDescription>
-        <CardTitle className={cn("font-heading text-3xl font-semibold tabular-nums", valueClass)}>{value}</CardTitle>
-      </CardHeader>
-      {caption ? <CardContent className="text-xs text-muted-foreground">{caption}</CardContent> : null}
-    </Card>
+  const tile = (
+    <div className={cn("surface relative flex h-full flex-col gap-2 overflow-hidden px-5 py-4", href && "surface-interactive", className)}>
+      <span aria-hidden className={cn("absolute inset-y-4 left-0 w-[3px] rounded-r-full", barClass)} />
+      <span className="text-[13px] font-medium text-muted-foreground">{label}</span>
+      <span className={cn("font-heading text-[34px] leading-none font-bold tracking-[-0.03em] tabular-nums", valueClass)}>{value}</span>
+      {caption ? <span className="text-xs leading-snug text-muted-foreground">{caption}</span> : null}
+    </div>
   );
 
   return href ? (
     <Link href={href} className="block rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50">
-      {card}
+      {tile}
     </Link>
   ) : (
-    card
+    tile
   );
 }

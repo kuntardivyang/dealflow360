@@ -51,15 +51,15 @@ export function AuthForm({
 
   return (
     <div className="space-y-6">
-      <nav aria-label="Log in or sign up" className="grid grid-cols-2 rounded-lg bg-muted p-1 text-sm font-medium">
+      <nav aria-label="Log in or sign up" className="flex gap-6 border-b text-sm font-medium">
         {(["login", "signup"] as const).map((m) => (
           <Link
             key={m}
             href={m === "login" ? (next ? `/login?next=${encodeURIComponent(next)}` : "/login") : "/signup"}
             aria-current={mode === m ? "page" : undefined}
             className={cn(
-              "rounded-md py-1.5 text-center transition-colors",
-              mode === m ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+              "-mb-px border-b-2 pb-2.5 transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+              mode === m ? "border-link text-foreground" : "border-transparent text-muted-foreground hover:text-foreground",
             )}
           >
             {m === "login" ? "Log In" : "Sign Up"}
@@ -71,7 +71,7 @@ export function AuthForm({
         {next ? <input type="hidden" name="next" value={next} /> : null}
         {mode === "signup" ? (
           <Field id="name" label="Full name" errors={errors.name}>
-            <Input id="name" name="name" autoComplete="name" required aria-invalid={!!errors.name} placeholder="Riya Rao" />
+            <Input id="name" name="name" autoComplete="name" required aria-invalid={!!errors.name} placeholder="Riya Rao" className="h-10 bg-card px-3" />
           </Field>
         ) : null}
         <Field id="email" label="Email" errors={errors.email}>
@@ -84,6 +84,7 @@ export function AuthForm({
             aria-invalid={!!errors.email}
             placeholder="you@company.com"
             defaultValue={mode === "login" ? "" : undefined}
+            className="h-10 bg-card px-3"
           />
         </Field>
         <Field id="password" label="Password" errors={errors.password}>
@@ -96,28 +97,29 @@ export function AuthForm({
             minLength={mode === "signup" ? 8 : 1}
             aria-invalid={!!errors.password}
             placeholder={mode === "signup" ? "At least 8 characters" : "••••••••"}
+            className="h-10 bg-card px-3"
           />
         </Field>
         {generic ? (
-          <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <p role="alert" className="rounded-lg bg-destructive/8 px-3 py-2 text-sm text-destructive ring-1 ring-inset ring-destructive/20">
             {generic}
           </p>
         ) : null}
-        <Button type="submit" className="w-full" disabled={pending}>
+        <Button type="submit" size="lg" className="h-10 w-full text-[15px]" disabled={pending}>
           {pending ? <Loader2 className="animate-spin" /> : null}
           {mode === "login" ? "Log In" : "Create account"}
         </Button>
         {mode === "login" ? (
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            <button type="button" className="hover:text-foreground" title="Not available in this build" onClick={() => undefined}>
+          <div className="flex items-center justify-between pt-1 text-xs text-muted-foreground">
+            <button type="button" className="rounded-sm hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50" title="Not available in this build" onClick={() => undefined}>
               Forgot Password?
             </button>
-            <Link href="/portal/login" className="hover:text-foreground">
+            <Link href="/portal/login" className="rounded-sm text-link hover:underline focus-visible:ring-3 focus-visible:ring-ring/50">
               Customer? Open your portal
             </Link>
           </div>
         ) : (
-          <p className="text-xs text-muted-foreground">New accounts start as Sales Rep. An Admin can change the role later.</p>
+          <p className="pt-1 text-xs leading-relaxed text-muted-foreground">New accounts start as Sales Rep. An Admin can change the role later.</p>
         )}
       </form>
     </div>

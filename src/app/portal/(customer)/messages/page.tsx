@@ -20,7 +20,7 @@ export default async function MessagesPage() {
       {items.length === 0 ? (
         <EmptyState icon={MessageSquare} title="No messages yet" description="Comments, change requests and counter-offers you submit on a quotation show up here." />
       ) : (
-        <ul className="divide-y rounded-xl bg-card ring-1 ring-foreground/10">
+        <ul className="surface divide-y divide-border/80 overflow-hidden">
           {items.map((r) => {
             const line = r.lineId ? r.quotation.lines.find((l) => l.id === r.lineId) : null;
             return (

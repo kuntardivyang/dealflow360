@@ -1,11 +1,11 @@
 // Placeholder home by B for the shell hand-off. A replaces this file in feature 85
 // (Sales Dashboard / Home). Counts are live from the database so the frame is never empty.
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { ArrowUpRight, Plus } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { formatDateTime } from "@/lib/format";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState, PageHeader, StatTile } from "@/components/shared";
 
 export const metadata = { title: "Dashboard" };
@@ -32,9 +32,9 @@ export default async function DashboardPage() {
             <Button variant="outline" nativeButton={false} render={<Link href="/approvals" />}>
               View Approvals
             </Button>
-            <Button disabled title="The quotation builder arrives with the next merge">
+            <Link href="/quotes" className={buttonVariants()}>
               <Plus /> New Quotation
-            </Button>
+            </Link>
           </>
         }
       />
@@ -56,32 +56,35 @@ export default async function DashboardPage() {
         />
       </div>
       <Card>
-        <CardHeader>
+        <CardHeader className="border-b">
           <CardTitle>Recent Activity</CardTitle>
+          <CardDescription>Every approval, edit, portal request and payment, newest first.</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-0">
           {recent.length === 0 ? (
-            <EmptyState className="py-8" title="No activity yet" description="Every approval, edit, portal request and payment shows up here." />
+            <EmptyState className="mx-4 border-0 bg-transparent py-8" title="No activity yet" description="Every approval, edit, portal request and payment shows up here." />
           ) : (
-            <ul className="divide-y">
+            <ol className="divide-y divide-border/80">
               {recent.map((a) => (
-                <li key={a.id} className="flex items-center justify-between gap-4 py-2 text-sm">
-                  <span>
-                    <span className="font-medium">{a.actorName}</span> {a.action.toLowerCase().replaceAll("_", " ")}
+                <li key={a.id} className="flex items-center justify-between gap-4 px-4 py-2.5 text-sm">
+                  <span className="min-w-0 truncate">
+                    <span className="font-semibold">{a.actorName}</span>{" "}
+                    <span className="text-muted-foreground">{a.action.toLowerCase().replaceAll("_", " ")}</span>
                     {a.quotation ? (
                       <>
                         {" "}
-                        <Link href={`/quotes/${a.quotation.publicId}`} className="text-primary hover:underline">
+                        <Link href={`/quotes/${a.quotation.publicId}`} className="inline-flex items-center gap-0.5 font-medium text-link hover:underline">
                           {a.quotation.number}
+                          <ArrowUpRight className="size-3.5" />
                         </Link>{" "}
-                        <span className="text-muted-foreground">({a.quotation.customer.name})</span>
+                        <span className="text-muted-foreground">{a.quotation.customer.name}</span>
                       </>
                     ) : null}
                   </span>
-                  <span className="shrink-0 text-xs text-muted-foreground">{formatDateTime(a.at)}</span>
+                  <time className="shrink-0 text-xs text-muted-foreground tabular-nums">{formatDateTime(a.at)}</time>
                 </li>
               ))}
-            </ul>
+            </ol>
           )}
         </CardContent>
       </Card>

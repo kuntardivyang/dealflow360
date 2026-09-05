@@ -10,10 +10,11 @@ const ITEMS = [
   { label: "Profile", href: "/portal/profile" },
 ];
 
+/** Three quiet text links; the current one is filled. */
 export function PortalNav() {
   const pathname = usePathname();
   return (
-    <nav aria-label="Portal" className="flex items-center gap-0.5 rounded-lg bg-muted p-1">
+    <nav aria-label="Portal" className="flex items-center gap-1">
       {ITEMS.map((item) => {
         const active = item.href === "/portal" ? pathname === "/portal" || pathname.startsWith("/portal/q/") : pathname.startsWith(item.href);
         return (
@@ -22,8 +23,8 @@ export function PortalNav() {
             href={item.href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors",
-              active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+              "rounded-full px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+              active ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
             )}
           >
             {item.label}

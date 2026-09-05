@@ -4,6 +4,7 @@ import Link from "next/link";
 import { HeartPulse } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState, PageHeader, StatTile, StatusBadge } from "@/components/shared";
+import { ClickableRow } from "@/components/shared/clickable-row";
 import { AlertActions } from "@/components/health/alert-actions";
 import { RefreshHealthButton } from "@/components/health/refresh-button";
 import { requireUser } from "@/lib/auth/internal";
@@ -31,46 +32,50 @@ export default async function HealthPage({ searchParams }: { searchParams: Promi
         actions={<RefreshHealthButton />}
       />
       <div className="grid gap-4 sm:grid-cols-3">
-        <StatTile label="Stalled Deals" value={counts.stalled} caption={`quotes idle ${(cfg?.stalledDays ?? 3) + 1}+ days`} tone={counts.stalled ? "warning" : "default"} href={type === "STALLED" ? "/health" : "/health?type=STALLED"} />
-        <StatTile label="Discount Anomalies" value={counts.anomalies} caption="above the rep's own average" tone={counts.anomalies ? "danger" : "default"} href={type === "DISCOUNT_ANOMALY" ? "/health" : "/health?type=DISCOUNT_ANOMALY"} />
-        <StatTile label="Delivery Slippage" value={counts.slippage} caption="promise dates at risk" tone={counts.slippage ? "warning" : "default"} href={type === "DELIVERY_SLIPPAGE" ? "/health" : "/health?type=DELIVERY_SLIPPAGE"} />
+        <StatTile label="Stalled Deals" value={counts.stalled} caption={`quotes idle ${(cfg?.stalledDays ?? 3) + 1}+ days`} tone={counts.stalled ? "warning" : "default"} href={type === "STALLED" ? "/health" : "/health?type=STALLED"} className={type === "STALLED" ? "ring-2 ring-link" : undefined} />
+        <StatTile label="Discount Anomalies" value={counts.anomalies} caption="above the rep's own average" tone={counts.anomalies ? "danger" : "default"} href={type === "DISCOUNT_ANOMALY" ? "/health" : "/health?type=DISCOUNT_ANOMALY"} className={type === "DISCOUNT_ANOMALY" ? "ring-2 ring-link" : undefined} />
+        <StatTile label="Delivery Slippage" value={counts.slippage} caption="promise dates at risk" tone={counts.slippage ? "warning" : "default"} href={type === "DELIVERY_SLIPPAGE" ? "/health" : "/health?type=DELIVERY_SLIPPAGE"} className={type === "DELIVERY_SLIPPAGE" ? "ring-2 ring-link" : undefined} />
       </div>
       {visible.length === 0 ? (
         <EmptyState icon={HeartPulse} title={type ? "No alerts of this kind" : "Every deal is healthy"} description="Alerts appear here as soon as a quote goes idle, a discount jumps above the rep's average, or a promised delivery slips." />
       ) : (
-        <div className="overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
+        <div className="surface overflow-hidden">
           <Table>
             <TableHeader>
-              <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <TableHead className="px-4">Deal</TableHead>
-                <TableHead>Issue</TableHead>
-                <TableHead>Flagged</TableHead>
-                <TableHead className="px-4">Action</TableHead>
+              <TableRow className="border-b-foreground/10 bg-muted/50 hover:bg-muted/50">
+                <TableHead className="col-label h-9 px-4">Deal</TableHead>
+                <TableHead className="col-label h-9">Issue</TableHead>
+                <TableHead className="col-label h-9">Flagged</TableHead>
+                {canAct ? <TableHead className="col-label h-9 px-4">Action</TableHead> : null}
               </TableRow>
             </TableHeader>
             <TableBody>
               {visible.map((a) => (
-                <TableRow key={a.id}>
-                  <TableCell className="px-4">
-                    <Link href={`/quotes/${a.quotation.publicId}`} className="font-medium text-primary hover:underline">
+                <ClickableRow key={a.id} href={`/quotes/${a.quotation.publicId}`} className="align-top">
+                  <TableCell className="px-4 py-3">
+                    <Link href={`/quotes/${a.quotation.publicId}`} className="font-semibold text-link hover:underline">
                       {a.quotation.customer.name}
                     </Link>
-                    <span className="block text-xs text-muted-foreground">
-                      {a.quotation.number} · {a.quotation.rep.name} · <StatusBadge status={a.quotation.status} className="h-4 px-1.5 text-[10px]" />
+                    <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                      <span className="tabular-nums">{a.quotation.number}</span>
+                      <span>{a.quotation.rep.name}</span>
+                      <StatusBadge status={a.quotation.status} className="h-[18px] px-1.5 text-[10.5px]" />
                     </span>
                   </TableCell>
-                  <TableCell className="whitespace-normal">
-                    <span className="inline-flex flex-wrap items-center gap-2">
+                  <TableCell className="py-3 whitespace-normal">
+                    <span className="flex flex-wrap items-center gap-2">
                       <StatusBadge status={TYPE_TONE[a.type]} label={TYPE_LABEL[a.type]} />
                       <span>{a.message}</span>
                       {a.severity > 1 ? <span className="text-xs text-muted-foreground">severity {a.severity}</span> : null}
                     </span>
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{formatDateTime(a.firstSeenAt)}</TableCell>
-                  <TableCell className="px-4">
-                    <AlertActions alertId={a.id} canAct={canAct} nudgedAt={a.lastNudgedAt ? formatDateTime(a.lastNudgedAt) : null} escalatedAt={a.escalatedAt ? formatDateTime(a.escalatedAt) : null} />
-                  </TableCell>
-                </TableRow>
+                  <TableCell className="py-3 text-muted-foreground tabular-nums">{formatDateTime(a.firstSeenAt)}</TableCell>
+                  {canAct ? (
+                    <TableCell className="px-4 py-3">
+                      <AlertActions alertId={a.id} canAct={canAct} nudgedAt={a.lastNudgedAt ? formatDateTime(a.lastNudgedAt) : null} escalatedAt={a.escalatedAt ? formatDateTime(a.escalatedAt) : null} />
+                    </TableCell>
+                  ) : null}
+                </ClickableRow>
               ))}
             </TableBody>
           </Table>

@@ -49,7 +49,7 @@ export default async function FulfillmentPage({ searchParams }: { searchParams: 
     return "RESERVED";
   };
   const orderColumns: Column<Order>[] = [
-    { key: "number", header: "Order", cell: (o) => <span className="font-medium">{o.number}</span> },
+    { key: "number", header: "Order", cell: (o) => <span className="font-semibold tabular-nums">{o.number}</span> },
     { key: "customer", header: "Customer", cell: (o) => o.customer.name },
     {
       key: "status",
@@ -69,10 +69,10 @@ export default async function FulfillmentPage({ searchParams }: { searchParams: 
   return (
     <div className="space-y-6">
       <PageHeader title="Fulfillment and Stock" description="Live stock per warehouse, plus every confirmed order that still needs fulfilling." />
-      {sp.error ? <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{sp.error}</p> : null}
+      {sp.error ? <p className="rounded-lg bg-destructive/8 px-3 py-2 text-sm text-destructive ring-1 ring-inset ring-destructive/20">{sp.error}</p> : null}
 
       <section className="space-y-2">
-        <h2 className="text-sm font-medium text-muted-foreground">Stock</h2>
+        <h2 className="font-heading text-base font-bold tracking-tight">Stock</h2>
         <DataTable columns={stockColumns} rows={stock} rowKey={(s) => s.id} empty={<EmptyState title="No stock rows" />} />
       </section>
 
@@ -83,21 +83,21 @@ export default async function FulfillmentPage({ searchParams }: { searchParams: 
           </CardHeader>
           <CardContent>
             <form action={receiveStockForm} className="flex flex-wrap items-end gap-2 text-sm">
-              <select name="warehouseId" required className="h-9 rounded-md border bg-card px-2" aria-label="Warehouse">
+              <select name="warehouseId" required className="h-9 rounded-lg border border-input bg-card outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 px-2" aria-label="Warehouse">
                 {warehouses.map((w) => (
                   <option key={w.id} value={w.id}>
                     {w.name}
                   </option>
                 ))}
               </select>
-              <select name="productId" required className="h-9 rounded-md border bg-card px-2" aria-label="Product">
+              <select name="productId" required className="h-9 rounded-lg border border-input bg-card outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 px-2" aria-label="Product">
                 {goods.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
                   </option>
                 ))}
               </select>
-              <input name="qty" type="number" min={1} defaultValue={5} required className="h-9 w-20 rounded-md border bg-card px-2 text-right" aria-label="Quantity" />
+              <input name="qty" type="number" min={1} defaultValue={5} required className="h-9 w-20 rounded-lg border border-input bg-card outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 px-2 text-right" aria-label="Quantity" />
               <Button type="submit" variant="outline">
                 Record receipt
               </Button>
@@ -108,13 +108,13 @@ export default async function FulfillmentPage({ searchParams }: { searchParams: 
       ) : null}
 
       <section className="space-y-2">
-        <h2 className="text-sm font-medium text-muted-foreground">Orders awaiting fulfillment</h2>
+        <h2 className="font-heading text-base font-bold tracking-tight">Orders awaiting fulfillment</h2>
         <DataTable
           columns={orderColumns}
           rows={orders}
           rowKey={(o) => o.id}
           rowHref={(o) => `/fulfillment/${o.publicId}`}
-          empty={<EmptyState title="Nothing to fulfil yet" description="Confirmed orders appear here with their recommended warehouse split." />}
+          empty={<EmptyState title="Nothing to fulfill yet" description="Confirmed orders appear here with their recommended warehouse split." />}
         />
       </section>
     </div>

@@ -3,12 +3,14 @@ import { cn } from "@/lib/utils";
 
 type Tone = "neutral" | "info" | "success" | "warning" | "danger";
 
+// Tinted field, darker text of the same hue, hairline ring. Prints black on white via
+// the [data-status] rule in globals.css.
 const TONE_CLASS: Record<Tone, string> = {
-  neutral: "bg-muted text-muted-foreground",
-  info: "bg-info/10 text-info",
-  success: "bg-success/10 text-success",
-  warning: "bg-warning/15 text-warning",
-  danger: "bg-destructive/10 text-destructive",
+  neutral: "bg-muted text-muted-foreground ring-foreground/10",
+  info: "bg-info/10 text-info ring-info/25",
+  success: "bg-success/10 text-success ring-success/25",
+  warning: "bg-warning/12 text-warning ring-warning/30",
+  danger: "bg-destructive/10 text-destructive ring-destructive/25",
 };
 
 // One place for every status colour in the app. Keys are the database enum values
@@ -60,12 +62,12 @@ export function StatusBadge({ status, label, className }: { status: string; labe
     <span
       data-status={status}
       className={cn(
-        "inline-flex h-5 shrink-0 items-center gap-1.5 rounded-full px-2 text-xs font-medium whitespace-nowrap",
+        "inline-flex h-[22px] shrink-0 items-center gap-1.5 rounded-full px-2 text-xs font-semibold whitespace-nowrap ring-1 ring-inset",
         TONE_CLASS[meta.tone],
         className,
       )}
     >
-      <span aria-hidden className="size-1.5 rounded-full bg-current" />
+      <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-current" />
       {label ?? meta.label}
     </span>
   );

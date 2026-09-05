@@ -12,18 +12,19 @@ import { riskPreview } from "@/domain/route";
 import { requireUser } from "@/lib/auth/internal";
 import type { RiskPreview } from "@/lib/contract";
 import { prisma } from "@/lib/db";
-import { formatBp, formatDateTime, formatPoints } from "@/lib/format";
+import { formatBp, formatDate, formatDateTime, formatPoints } from "@/lib/format";
 import { canTransition } from "@/lib/state";
 import { cn } from "@/lib/utils";
 import { loadRiskWeights, loadRoutingRules } from "@/services/quotation.service";
 import { suggestFor } from "@/services/upsell.service";
-import { confirmOnBehalfForm, reviseQuotationForm, sendToCustomerForm } from "../../actions/quotation";
+import { confirmOnBehalfForm, respondToRequestForm, reviseQuotationForm, sendToCustomerForm } from "../../actions/quotation";
 import { Builder, type BuilderLine, type PickerProduct } from "./_components/builder";
 import { RiskCard, chainLabel } from "./_components/risk-card";
 
 export const dynamic = "force-dynamic";
 
 const ROLE_LABEL: Record<string, string> = { SALES_MANAGER: "Sales Manager", FINANCE: "Finance" };
+const REQUEST_TYPE_LABEL: Record<string, string> = { COMMENT: "Comment", CHANGE_REQUEST: "Change request", COUNTER_DISCOUNT: "Counter discount" };
 
 export default async function QuotationDetailPage({
   params,
@@ -41,6 +42,7 @@ export default async function QuotationDetailPage({
       rep: true,
       lines: { orderBy: { sortOrder: "asc" }, include: { product: { include: { category: true } }, plan: true } },
       approvalRequests: { orderBy: { version: "desc" }, take: 1, include: { steps: { orderBy: { stepNo: "asc" }, include: { actedBy: true } } } },
+      portalRequests: { orderBy: { createdAt: "desc" }, include: { line: { select: { description: true } }, contact: { select: { name: true } } } },
     },
   });
   if (!q) notFound();
@@ -48,6 +50,9 @@ export default async function QuotationDetailPage({
   const tab = sp.tab === "audit" ? "audit" : "lines";
   const canEdit = canTransition(q.status, "EDIT_LINES") && (q.repUserId === user.id || user.role === "ADMIN");
   const request = q.approvalRequests[0] ?? null;
+  const isOwner = q.repUserId === user.id || user.role === "ADMIN";
+  // B8: the rep answers portal requests only while the customer is negotiating; otherwise the panel is read-only.
+  const canRespond = isOwner && canTransition(q.status, "REP_RESPOND");
 
   const stored = (q.riskBreakdown as unknown as RiskPreview | null) ?? null;
   const risk =
@@ -150,7 +155,7 @@ export default async function QuotationDetailPage({
   const tabLink = (t: "lines" | "audit", label: string) => (
     <Link
       href={`/quotes/${publicId}${t === "audit" ? "?tab=audit" : ""}`}
-      className={cn("border-b-2 px-3 py-2 text-sm font-medium", tab === t ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground")}
+      className={cn("-mb-px border-b-2 px-3 py-2.5 text-sm font-medium transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50", tab === t ? "border-link text-foreground" : "border-transparent text-muted-foreground hover:text-foreground")}
     >
       {label}
     </Link>
@@ -158,7 +163,7 @@ export default async function QuotationDetailPage({
 
   return (
     <div className="space-y-6">
-      <Link href="/quotes" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+      <Link href="/quotes" className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground" data-print-hide>
         <ArrowLeft className="size-4" /> Quotations
       </Link>
       <PageHeader
@@ -167,7 +172,7 @@ export default async function QuotationDetailPage({
         actions={
           <>
             <StatusBadge status={q.status} className="h-6 px-3 text-sm" />
-            {q.status === "REJECTED" && (q.repUserId === user.id || user.role === "ADMIN") ? (
+            {q.status === "REJECTED" && isOwner ? (
               <form action={reviseQuotationForm}>
                 <input type="hidden" name="quotationId" value={q.id} />
                 <input type="hidden" name="version" value={q.version} />
@@ -181,10 +186,27 @@ export default async function QuotationDetailPage({
         }
       />
 
-      {sp.error ? <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{sp.error}</p> : null}
+      {sp.error ? <p className="rounded-lg bg-destructive/8 px-3 py-2 text-sm text-destructive ring-1 ring-inset ring-destructive/20">{sp.error}</p> : null}
+
+      <div className="surface grid divide-y divide-border/80 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+        <div className="px-5 py-3.5">
+          <p className="text-xs font-medium text-muted-foreground">Customer</p>
+          <p className="mt-1 text-sm">
+            <span className="font-heading text-base font-bold tracking-tight">{q.customer.name}</span>{" "}
+            <span className="text-muted-foreground">· {q.customer.tier.name} tier</span>
+          </p>
+        </div>
+        <div className="px-5 py-3.5">
+          <p className="text-xs font-medium text-muted-foreground">Price List</p>
+          <p className="mt-1 text-sm">
+            <span className="font-heading text-base font-bold tracking-tight">{q.customer.tier.name} price list</span>{" "}
+            <span className="text-muted-foreground">· INR · discount ceiling {formatBp(q.customer.tier.discountCeilingBp)}</span>
+          </p>
+        </div>
+      </div>
 
       {request && q.status === "PENDING_APPROVAL" ? (
-        <Card className="border-warning/40 bg-warning/5">
+        <Card className="border-l-4 border-l-warning bg-warning/5">
           <CardContent className="flex flex-wrap items-center gap-4 p-4 text-sm">
             <span className="font-medium">Awaiting approval, round {request.version}</span>
             <ol className="flex flex-wrap items-center gap-2">
@@ -199,19 +221,19 @@ export default async function QuotationDetailPage({
         </Card>
       ) : null}
       {q.status === "REJECTED" && request ? (
-        <Card className="border-destructive/40 bg-destructive/5">
+        <Card className="border-l-4 border-l-destructive bg-destructive/5">
           <CardContent className="p-4 text-sm">
             <span className="font-medium">Rejected.</span> {request.reason ?? "See the audit trail for the reason."} Press Revise to edit and confirm again.
           </CardContent>
         </Card>
       ) : null}
       {q.status === "APPROVED" ? (
-        <Card className="border-success/40 bg-success/5">
+        <Card className="border-l-4 border-l-success bg-success/5">
           <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4 text-sm">
             <span>
               <span className="font-medium">Approved.</span> Routing needed {request ? chainLabel(request.chain as string[]) : "no approval"}. Send it to the customer to negotiate and confirm in the portal.
             </span>
-            {q.repUserId === user.id || user.role === "ADMIN" ? (
+            {isOwner ? (
               <form action={sendToCustomerForm}>
                 <input type="hidden" name="quotationId" value={q.id} />
                 <input type="hidden" name="version" value={q.version} />
@@ -223,11 +245,11 @@ export default async function QuotationDetailPage({
         </Card>
       ) : null}
       {q.status === "SENT" || q.status === "UNDER_NEGOTIATION" ? (
-        <Card className="border-info/40 bg-info/5">
+        <Card className="border-l-4 border-l-info bg-info/5">
           <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4 text-sm">
             <span>
               <span className="font-medium">{q.status === "SENT" ? "Sent to the customer." : "Under negotiation."}</span> Portal link:{" "}
-              <code className="rounded bg-muted px-1.5 py-0.5 text-xs">/portal/q/{q.publicId}</code> (customer logs in with their portal account).
+              <code className="rounded-md bg-card px-1.5 py-0.5 font-mono text-xs ring-1 ring-foreground/10">/portal/q/{q.publicId}</code> (customer logs in with their portal account).
             </span>
             {user.role === "ADMIN" ? (
               <form action={confirmOnBehalfForm} className="flex items-center gap-2">
@@ -244,19 +266,81 @@ export default async function QuotationDetailPage({
         </Card>
       ) : null}
       {q.status === "CONFIRMED" || q.status === "FULFILLMENT" || q.status === "PAID" ? (
-        <Card className="border-success/40 bg-success/5">
+        <Card className="border-l-4 border-l-success bg-success/5">
           <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4 text-sm">
             <span>
               <span className="font-medium">Order confirmed{q.confirmedName ? ` by ${q.confirmedName}` : ""}.</span> Warehouse split and billing follow from here.
             </span>
-            <Link href={`/fulfillment/${q.publicId}`} className="text-sm font-medium underline-offset-4 hover:underline">
+            <Link href={`/fulfillment/${q.publicId}`} className="text-sm font-medium text-link underline-offset-4 hover:underline">
               Open fulfillment →
             </Link>
           </CardContent>
         </Card>
       ) : null}
 
-      <nav className="flex border-b" aria-label="Sections">
+      {q.portalRequests.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Customer requests</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm">
+            <p className="mb-3 text-xs text-muted-foreground">
+              Requests the customer raised in the portal. Accepting a counter discount applies it to the line; if the new terms exceed the ceilings the quotation re-enters approval automatically.
+              {!canRespond ? " Read-only: only the owning rep can answer, and only while the quotation is under negotiation." : ""}
+            </p>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="col-label border-b border-foreground/10 text-left [&_th]:pr-4 [&_th:last-child]:pr-0">
+                  <tr>
+                    <th className="py-2">Type</th>
+                    <th className="py-2">Line</th>
+                    <th className="py-2">Message</th>
+                    <th className="py-2 text-right whitespace-nowrap">Proposed</th>
+                    <th className="py-2">Status</th>
+                    <th className="py-2">Date</th>
+                    <th className="py-2" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y [&_td]:pr-4 [&_td:last-child]:pr-0">
+                  {q.portalRequests.map((r) => (
+                    <tr key={r.id} className="align-top">
+                      <td className="py-2 whitespace-nowrap">{REQUEST_TYPE_LABEL[r.type] ?? r.type}</td>
+                      <td className="py-2">{r.line?.description ?? <span className="text-muted-foreground">Whole order</span>}</td>
+                      <td className="py-2">
+                        {r.message ?? <span className="text-muted-foreground">–</span>}
+                        {r.requestedDeliveryDate ? <p className="text-xs text-muted-foreground">Requested delivery {formatDate(r.requestedDeliveryDate)}</p> : null}
+                        {r.responseNote ? <p className="text-xs text-muted-foreground">Response: {r.responseNote}</p> : null}
+                        <p className="text-xs text-muted-foreground">by {r.contact.name}</p>
+                      </td>
+                      <td className="py-2 text-right tabular-nums">{r.proposedDiscountBp !== null ? formatBp(r.proposedDiscountBp) : "–"}</td>
+                      <td className="py-2"><StatusBadge status={r.status} /></td>
+                      <td className="py-2 whitespace-nowrap text-muted-foreground">{formatDateTime(r.createdAt)}</td>
+                      <td className="py-2">
+                        {r.status === "OPEN" && canRespond ? (
+                          <form action={respondToRequestForm} className="flex flex-wrap items-center justify-end gap-1">
+                            <input type="hidden" name="quotationId" value={q.id} />
+                            <input type="hidden" name="requestId" value={r.id} />
+                            <input type="hidden" name="publicId" value={q.publicId} />
+                            <input name="note" placeholder="Note (optional)" aria-label="Response note" className="h-8 w-36 rounded-lg border border-input bg-card outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 px-2 text-xs" />
+                            <Button type="submit" name="decision" value="ACCEPT" size="sm">
+                              Accept
+                            </Button>
+                            <Button type="submit" name="decision" value="DECLINE" size="sm" variant="outline">
+                              Decline
+                            </Button>
+                          </form>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <nav className="flex border-b" aria-label="Sections" data-print-hide>
         {tabLink("lines", "Lines and totals")}
         {tabLink("audit", "Audit trail")}
       </nav>
@@ -308,6 +392,7 @@ export default async function QuotationDetailPage({
         <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
           <section className="space-y-2">
             <DataTable columns={readColumns} rows={q.lines} rowKey={(l) => l.id} empty={<EmptyState title="No lines" />} />
+            {q.status === "DRAFT" && !canEdit ? <p className="text-sm text-muted-foreground">Only the owning rep ({q.rep.name}) can edit this draft.</p> : null}
           </section>
           <div className="space-y-6">
             <Card>
