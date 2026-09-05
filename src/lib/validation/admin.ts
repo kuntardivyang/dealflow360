@@ -1,17 +1,17 @@
 // Owner: B. Backend configuration forms. `id` present = edit, absent = create.
 import { z } from "zod";
-import { zBp, zId, zMoney, zName, zPercentToBp } from "./common";
+import { zBp, zId, zMoney, zName } from "./common";
 
 export const approverRoleSchema = z.enum(["SALES_MANAGER", "FINANCE"]);
 export const roleSchema = z.enum(["ADMIN", "SALES_REP", "SALES_MANAGER", "FINANCE"]);
 
-export const tierSchema = z.object({ id: zId.optional(), name: zName, discountCeilingBp: zPercentToBp, sortOrder: z.coerce.number().int().default(0) });
+export const tierSchema = z.object({ id: zId.optional(), name: zName, discountCeilingBp: zBp, sortOrder: z.coerce.number().int().default(0) });
 
 export const categorySchema = z.object({
   id: zId.optional(),
   name: zName,
-  discountCeilingBp: zPercentToBp.nullable(),
-  minMarginBp: zPercentToBp.default(0),
+  discountCeilingBp: zBp.nullable(),
+  minMarginBp: zBp.default(0),
 });
 
 export const approvalRuleSchema = z.object({
@@ -44,7 +44,7 @@ export const riskConfigSchema = z
 export const warehouseSchema = z.object({
   id: zId.optional(),
   name: zName,
-  city: z.string().trim().max(80).optional(),
+  city: z.string().trim().max(80).nullish(),
   shipCostWeight: zMoney, // paise per shipment
   priority: z.coerce.number().int().min(1).max(1000).default(100),
 });
@@ -79,7 +79,7 @@ export const productSchema = z.object({
   unit: z.string().trim().min(1).max(20).default("Each"),
   listPrice: zMoney,
   cost: zMoney,
-  taxBp: zPercentToBp.default(18),
+  taxBp: zBp.default(1800),
   isPromoted: z.coerce.boolean().default(false),
   parentId: zId.nullable().default(null),
   variantLabel: z.string().trim().max(60).optional(),
@@ -91,8 +91,8 @@ export const pricelistRuleSchema = z.object({
   tierId: zId,
   categoryId: zId.nullable().default(null),
   productId: zId.nullable().default(null),
-  discountBp: zPercentToBp,
-  note: z.string().trim().max(200).optional(),
+  discountBp: zBp,
+  note: z.string().trim().max(200).nullish(),
 });
 
 export const userRoleSchema = z.object({ userId: zId, role: roleSchema, managerId: zId.nullable().default(null) });

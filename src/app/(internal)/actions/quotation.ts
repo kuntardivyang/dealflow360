@@ -14,6 +14,7 @@ import {
   ok,
   parseInput,
   removeLineSchema,
+  respondToRequestSchema,
   sendToCustomerSchema,
   setCustomerSchema,
   setOrderDiscountSchema,
@@ -23,8 +24,10 @@ import {
   type ConfirmOutcome,
   type QuotationRef,
   type QuotationTotalsView,
+  errorQuery,
 } from "@/lib/contract";
 import * as orders from "@/services/order.service";
+import * as portal from "@/services/portal.service";
 import * as quotations from "@/services/quotation.service";
 import { requireActionUser } from "@/lib/auth/internal";
 
@@ -46,7 +49,7 @@ export async function createQuotation(input: unknown): Promise<ActionResult<Quot
 export async function createQuotationAndOpen(formData: FormData): Promise<void> {
   const customerId = formData.get("customerId");
   const result = await createQuotation(customerId ? { customerId } : {});
-  if (!result.ok) redirect(`${QUOTES}?error=${encodeURIComponent(result.message)}`);
+  if (!result.ok) redirect(`${QUOTES}${errorQuery(result)}`);
   redirect(`${QUOTES}/${result.data.publicId}`);
 }
 
@@ -140,7 +143,7 @@ export async function reviseQuotation(input: unknown): Promise<ActionResult<Quot
 export async function reviseQuotationForm(formData: FormData): Promise<void> {
   const result = await reviseQuotation({ quotationId: formData.get("quotationId"), version: formData.get("version") });
   const publicId = String(formData.get("publicId") ?? "");
-  if (!result.ok) redirect(`${QUOTES}/${publicId}?error=${encodeURIComponent(result.message)}`);
+  if (!result.ok) redirect(`${QUOTES}/${publicId}${errorQuery(result)}`);
   redirect(`${QUOTES}/${publicId}`);
 }
 
@@ -174,13 +177,39 @@ export async function confirmOnBehalf(input: unknown): Promise<ActionResult<Quot
 export async function sendToCustomerForm(formData: FormData): Promise<void> {
   const publicId = String(formData.get("publicId") ?? "");
   const r = await sendToCustomer({ quotationId: formData.get("quotationId"), version: formData.get("version") });
-  redirect(`${QUOTES}/${publicId}${r.ok ? "" : `?error=${encodeURIComponent(r.message)}`}`);
+  redirect(`${QUOTES}/${publicId}${r.ok ? "" : `${errorQuery(r)}`}`);
 }
 
 export async function confirmOnBehalfForm(formData: FormData): Promise<void> {
   const publicId = String(formData.get("publicId") ?? "");
   const r = await confirmOnBehalf({ quotationId: formData.get("quotationId"), version: formData.get("version"), customerName: formData.get("customerName") });
-  redirect(`${QUOTES}/${publicId}${r.ok ? "" : `?error=${encodeURIComponent(r.message)}`}`);
+  redirect(`${QUOTES}/${publicId}${r.ok ? "" : `${errorQuery(r)}`}`);
+}
+
+/** Rep side of the portal negotiation (B8): accept or decline one customer request. Accepting a counter above the ceiling re-enters approval. */
+export async function respondToRequest(input: unknown): Promise<ActionResult<QuotationRef>> {
+  const p = parseInput(respondToRequestSchema, input);
+  if (!p.ok) return p;
+  try {
+    const ref = await portal.respondToRequest(p.data, await requireActionUser());
+    revalidatePath(QUOTES);
+    revalidatePath("/approvals");
+    return ok(ref);
+  } catch (e) {
+    return toActionError(e);
+  }
+}
+
+export async function respondToRequestForm(formData: FormData): Promise<void> {
+  const publicId = String(formData.get("publicId") ?? "");
+  const note = String(formData.get("note") ?? "").trim();
+  const r = await respondToRequest({
+    quotationId: formData.get("quotationId"),
+    requestId: formData.get("requestId"),
+    decision: formData.get("decision"),
+    ...(note ? { note } : {}),
+  });
+  redirect(`${QUOTES}/${publicId}${r.ok ? "" : `${errorQuery(r)}`}`);
 }
 
 /** Form action behind "New customer" on the quotations page: creates the customer and opens a draft for it. */

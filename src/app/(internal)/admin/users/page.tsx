@@ -30,11 +30,11 @@ export default async function UsersPage() {
         <CardContent className="px-0">
           <Table>
             <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="px-4">Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Quotations</TableHead>
-                <TableHead className="px-4">Role and manager</TableHead>
+              <TableRow className="border-b-foreground/10 bg-muted/50 hover:bg-muted/50">
+                <TableHead className="col-label h-9 px-4">Name</TableHead>
+                <TableHead className="col-label h-9">Email</TableHead>
+                <TableHead className="col-label h-9">Quotations</TableHead>
+                <TableHead className="col-label h-9 px-4">Role and manager</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

@@ -3,7 +3,9 @@
 // Owner: A. Record a payment against an invoice. The form sends rupees; paise are stored.
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { ok, parseInput, recordPaymentSchema, toActionError, type ActionResult } from "@/lib/contract";
+import { ok, parseInput, recordPaymentSchema, toActionError, type ActionResult,
+  errorQuery,
+} from "@/lib/contract";
 import { requireActionUser } from "@/lib/auth/internal";
 import * as billing from "@/services/billing.service";
 
@@ -30,6 +32,6 @@ export async function recordPaymentForm(formData: FormData): Promise<void> {
     method: formData.get("method") ?? "BANK_TRANSFER",
     reference: formData.get("reference") || undefined,
   });
-  const msg = r.ok ? "" : `?error=${encodeURIComponent(`${r.message}${r.fieldErrors ? " " + Object.values(r.fieldErrors).flat().join(" ") : ""}`)}`;
+  const msg = r.ok ? "" : `${errorQuery(r)}`;
   redirect(`/invoices/${publicId}${msg}`);
 }

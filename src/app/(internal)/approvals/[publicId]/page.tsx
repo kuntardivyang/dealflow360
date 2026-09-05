@@ -51,7 +51,7 @@ export default async function ApprovalDetailPage({
       <PageHeader
         title={
           <>
-            Approval Detail: {q.number} <span className="text-muted-foreground">({q.customer!.name})</span>
+            Approval Detail: <span className="tabular-nums">{q.number}</span> <span className="font-semibold text-muted-foreground">({q.customer!.name})</span>
           </>
         }
         description={`Submitted by ${q.rep.name}. Request v${current.version}${history.length ? `, ${history.length} earlier version${history.length > 1 ? "s" : ""} superseded` : ""}.`}
@@ -62,20 +62,29 @@ export default async function ApprovalDetailPage({
         }
       />
 
-      <div className="flex flex-wrap items-center gap-3 text-sm">
-        <span className="inline-flex items-center gap-2 rounded-lg bg-card px-3 py-1.5 ring-1 ring-foreground/10">
-          Blended Risk <StatusBadge status={band} /> <span className="tabular-nums text-muted-foreground">score {current.riskScore}</span>
-        </span>
-        <span className="inline-flex items-center gap-2 rounded-lg bg-card px-3 py-1.5 ring-1 ring-foreground/10">
-          Customer Tier <span className="font-medium">{q.customer!.tier.name}</span>
-          <span className="text-muted-foreground">(ceiling {formatBp(q.customer!.tier.discountCeilingBp)})</span>
-        </span>
-        <span className="inline-flex items-center gap-2 rounded-lg bg-card px-3 py-1.5 ring-1 ring-foreground/10">
-          Quotation <StatusBadge status={q.status} />
-          <span className="text-muted-foreground">
-            total <Money paise={q.total} /> · margin {formatBp(q.marginBp)}
+      <div className="surface grid divide-y divide-border/80 text-sm sm:grid-cols-3 sm:divide-x sm:divide-y-0" data-slot="facts">
+        <div className="flex flex-col gap-1.5 px-5 py-3.5">
+          <span className="text-xs font-medium text-muted-foreground">Blended Risk</span>
+          <span className="flex items-center gap-2">
+            <StatusBadge status={band} /> <span className="text-muted-foreground tabular-nums">score {current.riskScore}</span>
           </span>
-        </span>
+        </div>
+        <div className="flex flex-col gap-1.5 px-5 py-3.5">
+          <span className="text-xs font-medium text-muted-foreground">Customer Tier</span>
+          <span className="flex items-baseline gap-2">
+            <span className="font-heading text-base font-bold">{q.customer!.tier.name}</span>
+            <span className="text-muted-foreground">ceiling {formatBp(q.customer!.tier.discountCeilingBp)}</span>
+          </span>
+        </div>
+        <div className="flex flex-col gap-1.5 px-5 py-3.5">
+          <span className="text-xs font-medium text-muted-foreground">Quotation</span>
+          <span className="flex flex-wrap items-center gap-2">
+            <StatusBadge status={q.status} />
+            <span className="text-muted-foreground tabular-nums">
+              total <Money paise={q.total} className="font-medium text-foreground" /> · margin {formatBp(q.marginBp)}
+            </span>
+          </span>
+        </div>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_minmax(280px,340px)]">
@@ -92,11 +101,11 @@ export default async function ApprovalDetailPage({
             <CardContent className="px-0">
               <Table>
                 <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead className="px-4">Line</TableHead>
-                    <TableHead className="text-right">Discount Given</TableHead>
-                    <TableHead className="text-right">Limit Allowed</TableHead>
-                    <TableHead className="px-4 text-right">Over By</TableHead>
+                  <TableRow className="border-t border-b-foreground/10 bg-muted/50 hover:bg-muted/50">
+                    <TableHead className="col-label h-9 px-4">Line</TableHead>
+                    <TableHead className="col-label h-9 text-right">Discount Given</TableHead>
+                    <TableHead className="col-label h-9 text-right">Limit Allowed</TableHead>
+                    <TableHead className="col-label h-9 px-4 text-right">Over By</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -108,8 +117,8 @@ export default async function ApprovalDetailPage({
                           <span className="font-medium">{l.description}</span>{" "}
                           <span className="text-muted-foreground">({l.product.category.name})</span>
                         </TableCell>
-                        <TableCell className="text-right tabular-nums">{formatBp(l.effectiveDiscountBp)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{formatBp(l.ceilingBp)}</TableCell>
+                        <TableCell className="text-right font-medium tabular-nums">{formatBp(l.effectiveDiscountBp)}</TableCell>
+                        <TableCell className="text-right text-muted-foreground tabular-nums">{formatBp(l.ceilingBp)}</TableCell>
                         <TableCell className="px-4 text-right">
                           {over > 0 ? (
                             <StatusBadge status="OVER" label={`${formatPoints(over)} OVER`} />

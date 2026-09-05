@@ -114,11 +114,57 @@ export class ValidationError extends Error {
   }
 }
 
+/** Friendly text for the database CHECK constraints, keyed by the constraint name suffix used in the init migration. */
+const CHECK_MESSAGES: Record<string, string> = {
+  discount_bp_range: "Discount must be between 0 and 100 percent",
+  ceiling_bp_range: "Discount ceiling must be between 0 and 100 percent",
+  min_margin_range: "Minimum margin must be between 0 and 100 percent",
+  tax_bp_range: "Tax must be between 0 and 100 percent",
+  qty_positive: "Quantity must be at least 1",
+  prices_non_negative: "Prices cannot be negative",
+  non_negative: "Stock cannot go negative or be reserved beyond what is on hand",
+  paid_within_total: "Payment cannot exceed the invoice total",
+  amount_positive: "Amount must be more than zero",
+  weights_sum_100: "Risk weights must add up to 100",
+  min_score_range: "Minimum score must be between 0 and 100",
+  period_order: "The period end must not be before its start",
+  periods_positive: "A plan needs at least one period",
+};
+
+/** Database and Prisma errors, recognised by shape so this file stays free of Prisma imports. */
+function fromDatabaseError(e: unknown): ActionError | null {
+  if (typeof e !== "object" || e === null) return null;
+  const code = (e as { code?: string }).code;
+  const meta = (e as { meta?: { target?: string[] | string; field_name?: string } }).meta;
+  const message = String((e as { message?: string }).message ?? "");
+  if (code === "P2002") {
+    const target = Array.isArray(meta?.target) ? meta?.target.join(", ") : meta?.target;
+    return fail("VALIDATION", "A record with this value already exists", target ? { [String(target)]: ["Already in use"] } : undefined);
+  }
+  if (code === "P2003") return fail("VALIDATION", "A referenced record no longer exists. Refresh and try again.");
+  if (code === "P2025") return fail("NOT_FOUND", "The record was not found. It may have been changed or removed.");
+  const check = message.match(/violates check constraint "([^"]+)"/);
+  if (check) {
+    const key = Object.keys(CHECK_MESSAGES).find((k) => check[1].endsWith(k));
+    return fail("VALIDATION", key ? CHECK_MESSAGES[key] : "A value is outside the allowed range");
+  }
+  if (/PrismaClientValidationError|Argument .* is missing|Invalid value for argument/.test(message)) {
+    return fail("VALIDATION", "Some of the values sent were not valid");
+  }
+  return null;
+}
+
 export function toActionError(e: unknown): ActionError {
   if (e instanceof ValidationError) return fail("VALIDATION", e.message, e.fieldErrors);
   if (e instanceof ConflictError || e instanceof ForbiddenError || e instanceof NotFoundError || e instanceof UnauthenticatedError)
     return fail(e.code, e.message);
-  return fail("ERROR", "Something went wrong. Please try again.");
+  return fromDatabaseError(e) ?? fail("ERROR", "Something went wrong. Please try again.");
+}
+
+/** Query string for a redirect after a failed form action: message plus every field error. */
+export function errorQuery(r: ActionError): string {
+  const detail = r.fieldErrors ? Object.values(r.fieldErrors).flat().join(" ") : "";
+  return `?error=${encodeURIComponent(`${r.message}${detail ? ` ${detail}` : ""}`)}`;
 }
 
 // ---------------------------------------------------------------------------

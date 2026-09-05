@@ -6,7 +6,9 @@ import { splitWarehouses, validateOverride } from "@/domain/split";
 import { audit } from "@/lib/audit";
 import {
   ConflictError,
+  ForbiddenError,
   NotFoundError,
+  OPS_ROLES,
   ValidationError,
   actorFromUser,
   type AcceptSplitInput,
@@ -229,12 +231,22 @@ export async function ship(input: ShipInput, user: SessionUser): Promise<{ shipm
     }
     await tx.shipment.update({ where: { id: shipment.id }, data: { status: "SHIPPED", shippedAt: new Date() } });
     await audit(tx, { entityType: "Shipment", entityId: shipment.id, quotationId: q.id, action: "SHIP", actor, after: { warehouseId: shipment.warehouseId, lines: shipment.lines.map((l) => ({ lineId: l.quotationLineId, qty: l.qty })) } });
+    // Last shipment out and every invoice already settled: the order is complete.
+    const stillReserved = await tx.shipment.count({ where: { plan: { quotationId: q.id, status: "ACCEPTED" }, status: "RESERVED" } });
+    const openInvoices = await tx.invoice.count({ where: { quotationId: q.id, status: { in: ["POSTED", "PARTIAL"] } } });
+    if (stillReserved === 0 && openInvoices === 0) {
+      assertTransition(q.status, "RECORD_PAYMENT");
+      await tx.quotation.update({ where: { id: q.id }, data: { status: "PAID" } });
+      await audit(tx, { entityType: "Quotation", entityId: q.id, quotationId: q.id, action: "PAID", actor, before: { status: q.status }, after: { status: "PAID" } });
+    }
     return { shipmentId: shipment.id };
   });
 }
 
 /** Stock arrives: on hand goes up, a receipt move is recorded. Backorder consolidation prompts come later. */
 export async function receiveStock(input: StockReceiptInput, user: SessionUser): Promise<{ stockLevelId: number }> {
+  if (!OPS_ROLES.includes(user.role)) throw new ForbiddenError("Only Finance, a Sales Manager or an Admin can record stock");
+  if (!Number.isInteger(input.qty) || input.qty < 1) throw new ValidationError("Quantity must be a whole number of at least 1", { qty: ["At least 1"] });
   return prisma.$transaction(async (tx) => {
     const actor = actorFromUser(user);
     const row = await tx.stockLevel.upsert({

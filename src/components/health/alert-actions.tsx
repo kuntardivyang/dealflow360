@@ -25,21 +25,21 @@ export function AlertActions({ alertId, canAct, nudgedAt, escalatedAt }: { alert
       router.refresh();
     });
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className="flex flex-col items-start gap-1.5">
       {escalatedAt ? (
-        <span className="text-xs font-medium text-destructive">Escalated {escalatedAt}</span>
+        <span className="text-xs font-semibold text-destructive">Escalated {escalatedAt}</span>
       ) : nudgedAt ? (
-        <span className="text-xs font-medium text-success">Nudge sent {nudgedAt}</span>
+        <span className="text-xs font-semibold text-success">Nudge sent {nudgedAt}</span>
       ) : null}
       {canAct ? (
-        <>
+        <span className="flex flex-wrap items-center gap-1.5">
           <Button size="xs" variant="outline" disabled={pending} onClick={() => act("NUDGE")}>
             {pending ? <Loader2 className="animate-spin" /> : <BellRing />} Nudge Rep
           </Button>
-          <Button size="xs" variant="ghost" disabled={pending || !!escalatedAt} onClick={() => act("ESCALATE")}>
+          <Button size="xs" variant="ghost" className="text-muted-foreground hover:text-destructive" disabled={pending || !!escalatedAt} onClick={() => act("ESCALATE")}>
             <TriangleAlert /> Escalate
           </Button>
-        </>
+        </span>
       ) : null}
     </div>
   );

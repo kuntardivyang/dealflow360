@@ -42,16 +42,16 @@ export default async function PortalQuotationPage({ params }: { params: Promise<
         actions={<StatusBadge status={STATUS_CODE[q.status]} label={q.status} className="h-7 px-3 text-sm" />}
       />
 
-      <div className="overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
+      <div className="surface overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow className="bg-muted/40 hover:bg-muted/40">
-              <TableHead className="px-4">Line</TableHead>
-              <TableHead className="text-right">Qty</TableHead>
-              <TableHead className="text-right">Unit price</TableHead>
-              <TableHead className="text-right">Discount</TableHead>
-              <TableHead className="text-right">Line total</TableHead>
-              <TableHead className="px-4">Customer Comment</TableHead>
+            <TableRow className="border-b-foreground/10 bg-muted/50 hover:bg-muted/50">
+              <TableHead className="col-label h-9 px-4">Line</TableHead>
+              <TableHead className="col-label h-9 text-right">Qty</TableHead>
+              <TableHead className="col-label h-9 text-right">Unit price</TableHead>
+              <TableHead className="col-label h-9 text-right">Discount</TableHead>
+              <TableHead className="col-label h-9 text-right">Line total</TableHead>
+              <TableHead className="col-label h-9 px-4">Customer Comment</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -101,8 +101,8 @@ export default async function PortalQuotationPage({ params }: { params: Promise<
 
       {q.requests.length > 0 ? (
         <section id="messages" className="space-y-2">
-          <h2 className="font-heading text-base font-semibold">Your requests</h2>
-          <ul className="divide-y rounded-xl bg-card ring-1 ring-foreground/10">
+          <h2 className="font-heading text-base font-bold tracking-tight">Your requests</h2>
+          <ul className="surface divide-y divide-border/80 overflow-hidden">
             {q.requests.map((r) => {
               const line = r.lineId ? q.lines.find((l) => l.id === r.lineId) : null;
               return (

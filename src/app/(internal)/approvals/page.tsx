@@ -1,7 +1,7 @@
 // Owner: B. Screen 5, Approvals list: every quotation that needed, needs, or is going
 // through discount approval. Counters, table, "Pending only" filter, row opens the detail.
 import Link from "next/link";
-import { ShieldCheck } from "lucide-react";
+import { ListFilter, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DataTable, EmptyState, PageHeader, StatTile, StatusBadge, type Column } from "@/components/shared";
 import { formatDateTime } from "@/lib/format";
@@ -16,7 +16,16 @@ export default async function ApprovalsPage({ searchParams }: { searchParams: Pr
   const visible = pendingOnly ? rows.filter((r) => r.status === "PENDING") : rows;
 
   const columns: Column<ApprovalRow>[] = [
-    { key: "number", header: "Quotation", cell: (r) => <span className="font-medium">{r.number}</span> },
+    {
+      key: "number",
+      header: "Quotation",
+      cell: (r) => (
+        <span className="font-semibold tabular-nums">
+          {r.number}
+          {r.version > 1 ? <span className="ml-1.5 text-xs font-medium text-muted-foreground">v{r.version}</span> : null}
+        </span>
+      ),
+    },
     { key: "customer", header: "Customer", cell: (r) => r.customer },
     {
       key: "risk",
@@ -31,10 +40,10 @@ export default async function ApprovalsPage({ searchParams }: { searchParams: Pr
     {
       key: "stage",
       header: "Stage",
-      cell: (r) => (r.status === "PENDING" ? <span className="font-medium">{r.stage}</span> : <StatusBadge status={r.status} />),
+      cell: (r) => (r.status === "PENDING" ? <StatusBadge status="PENDING" label={r.stage} /> : <StatusBadge status={r.status} />),
     },
     { key: "assigned", header: "Assigned To", cell: (r) => <span className="text-muted-foreground">{r.assignedTo}</span> },
-    { key: "when", header: "Submitted", cell: (r) => <span className="text-muted-foreground">{formatDateTime(r.createdAt)}</span> },
+    { key: "when", header: "Submitted", cell: (r) => <span className="text-muted-foreground tabular-nums">{formatDateTime(r.createdAt)}</span> },
   ];
 
   return (
@@ -44,7 +53,7 @@ export default async function ApprovalsPage({ searchParams }: { searchParams: Pr
         description="Every quotation that needed, needs, or is going through discount approval. Click a row for the risk breakdown and audit trail."
         actions={
           <Button variant={pendingOnly ? "default" : "outline"} nativeButton={false} render={<Link href={pendingOnly ? "/approvals" : "/approvals?filter=pending"} />}>
-            {pendingOnly ? "Show all" : "Filter: Pending Only"}
+            <ListFilter /> {pendingOnly ? "Show all" : "Filter: Pending Only"}
           </Button>
         }
       />

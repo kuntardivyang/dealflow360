@@ -4,10 +4,11 @@
 // carries the fresh totals and risk, so the margin and the OK / Over markers update at
 // once, then the page data refreshes in the background. No money is computed here.
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Minus, Plus, Sparkles, Trash2, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -134,12 +135,12 @@ export function Builder({
   const hasLines = lines.length > 0;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+    <div className="grid gap-6 lg:grid-cols-[1fr_320px]" data-print-hide>
       <div className="space-y-6">
         <Card>
           <CardHeader className="flex-row items-center justify-between">
             <CardTitle className="text-base">Order lines</CardTitle>
-            <span className="text-xs text-muted-foreground">{pending ? "Saving…" : "Every change is saved"}</span>
+            <span className={cn("text-xs", pending ? "text-link" : "text-muted-foreground")}>{pending ? "Saving…" : "Every change is saved"}</span>
           </CardHeader>
           <CardContent>
             {!hasLines ? (
@@ -147,15 +148,15 @@ export function Builder({
             ) : (
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Product</TableHead>
-                    <TableHead className="text-center">Qty</TableHead>
-                    <TableHead className="text-right">Price</TableHead>
-                    <TableHead className="text-right">Discount %</TableHead>
-                    <TableHead className="text-right">Limit</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Total</TableHead>
-                    <TableHead />
+                  <TableRow className="border-b-foreground/10 hover:bg-transparent">
+                    <TableHead className="col-label h-9">Product</TableHead>
+                    <TableHead className="col-label h-9 text-center">Qty</TableHead>
+                    <TableHead className="col-label h-9 text-right">Price</TableHead>
+                    <TableHead className="col-label h-9 text-right">Discount %</TableHead>
+                    <TableHead className="col-label h-9 text-right">Limit</TableHead>
+                    <TableHead className="col-label h-9">Status</TableHead>
+                    <TableHead className="col-label h-9 text-right">Total</TableHead>
+                    <TableHead className="col-label h-9" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -257,7 +258,7 @@ export function Builder({
                   onClick={() => setCategory(c)}
                   className={cn(
                     "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                    category === c ? "border-primary bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:text-foreground",
+                    category === c ? "border-foreground/25 bg-accent font-semibold text-accent-foreground" : "bg-card text-muted-foreground hover:text-foreground",
                   )}
                 >
                   {c}
@@ -266,7 +267,7 @@ export function Builder({
             </div>
             <ul className="grid gap-2 sm:grid-cols-2">
               {visible.map((p) => (
-                <li key={p.id} className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
+                <li key={p.id} className="flex items-center justify-between gap-3 rounded-lg border bg-card px-3 py-2 transition-colors hover:border-foreground/20">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">
                       {p.name} {p.isPromoted ? <StatusBadge status="PROMO" label="Promo" className="ml-1" /> : null}
@@ -320,7 +321,7 @@ export function Builder({
               <p className="text-muted-foreground">No suggestions right now.</p>
             ) : (
               visibleSuggestions.map((s) => (
-                <div key={s.productId} className="rounded-lg border p-2.5">
+                <div key={s.productId} className="rounded-lg border bg-card p-2.5">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate font-medium">
@@ -336,7 +337,7 @@ export function Builder({
                     <span className="text-xs">
                       <Money paise={s.listPrice} /> · margin <Money paise={s.marginDelta} signed className="font-medium text-success" /> each
                     </span>
-                    <Button size="sm" disabled={pending} onClick={() => run(addLine({ quotationId, version: view.version, productId: s.productId, qty: 1, discountBp: 0, source: "UPSELL" }))}>
+                    <Button size="sm" variant="outline" disabled={pending} onClick={() => run(addLine({ quotationId, version: view.version, productId: s.productId, qty: 1, discountBp: 0, source: "UPSELL" }))}>
                       <Plus /> Add to Quote
                     </Button>
                   </div>
@@ -348,12 +349,17 @@ export function Builder({
         </Card>
         {status === "DRAFT" ? (
           <>
-            <Button className="w-full" size="lg" disabled={pending || !hasLines} onClick={confirm}>
-              Confirm
-            </Button>
-            <p className="text-center text-xs text-muted-foreground">
-              {!hasLines ? "Add a line to confirm." : view.risk?.chain.length ? `Confirm sends this to: ${chainLabel(view.risk.chain)}` : "Confirm approves this quotation immediately."}
-            </p>
+        <div className="grid grid-cols-[auto_1fr] gap-2">
+          <Link href="/quotes" className={cn(buttonVariants({ variant: "outline", size: "lg" }))} title="Every change is already saved; go back to the list">
+            Save Draft
+          </Link>
+          <Button size="lg" disabled={pending || !hasLines} onClick={confirm}>
+            {view.risk?.chain.length ? "Submit for Approval" : "Confirm Quotation"}
+          </Button>
+        </div>
+        <p className="text-center text-xs text-muted-foreground">
+          {!hasLines ? "Add a line to confirm." : view.risk?.chain.length ? `Routes automatically to: ${chainLabel(view.risk.chain)}` : "Within every limit: approves immediately, no approval step needed."}
+        </p>
           </>
         ) : (
           <p className="rounded-md border border-warning/40 bg-warning/5 p-3 text-center text-xs text-warning">

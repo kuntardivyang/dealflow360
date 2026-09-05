@@ -1,4 +1,7 @@
 // Owner: A. Screen 9, Subscriptions list: every recurring plan across every customer.
+import Link from "next/link";
+import { Plus } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button";
 import { DataTable, EmptyState, PageHeader, StatTile, StatusBadge, type Column } from "@/components/shared";
 import { requireUser } from "@/lib/auth/internal";
 import { prisma } from "@/lib/db";
@@ -10,7 +13,7 @@ export const dynamic = "force-dynamic";
 const CYCLE = { WEEK: "Weekly", MONTH: "Monthly", QUARTER: "Quarterly", YEAR: "Yearly" } as const;
 
 export default async function SubscriptionsPage() {
-  await requireUser(undefined, "/subscriptions");
+  const user = await requireUser(undefined, "/subscriptions");
   const subs = await prisma.subscription.findMany({
     include: { customer: true, product: true, plan: true, schedule: { where: { status: "SCHEDULED" }, orderBy: { billDate: "asc" }, take: 1 } },
     orderBy: [{ status: "asc" }, { id: "desc" }],
@@ -26,8 +29,18 @@ export default async function SubscriptionsPage() {
   ];
   return (
     <div className="space-y-6">
-      <PageHeader title="Subscriptions" description="Every recurring plan across every customer, regardless of which order it came from." />
-      <div className="grid gap-3 sm:grid-cols-3">
+      <PageHeader
+        title="Subscriptions"
+        description="Every recurring plan across every customer, regardless of which order it came from. Click a row to open its billing detail and proration history."
+        actions={
+          user.role === "ADMIN" ? (
+            <Link href="/admin/plans" className={buttonVariants({ variant: "outline" })}>
+              <Plus /> New Plan (Admin)
+            </Link>
+          ) : null
+        }
+      />
+      <div className="grid gap-4 sm:grid-cols-3">
         <StatTile label="Active" value={String(count("ACTIVE"))} />
         <StatTile label="Paused" value={String(count("PAUSED"))} />
         <StatTile label="Cancelled" value={String(count("CANCELLED"))} />

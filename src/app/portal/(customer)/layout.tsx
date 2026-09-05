@@ -10,14 +10,16 @@ export default async function CustomerLayout({ children }: { children: React.Rea
   const user = await requirePortal();
   return (
     <div className="flex min-h-dvh flex-col">
-      <header className="sticky top-0 z-40 border-b bg-card/95 backdrop-blur" data-print-hide>
-        <div className="mx-auto flex h-14 w-full max-w-[1100px] items-center gap-4 px-4">
+      <header className="border-b bg-card" data-print-hide>
+        <div className="mx-auto flex h-16 w-full max-w-[1040px] items-center gap-6 px-6">
           <Brand href="/portal" />
-          <PortalNav />
-          <div className="ml-auto flex items-center gap-3 text-sm">
-            <span className="hidden text-muted-foreground sm:inline">
-              {user.contactName} · <span className="font-medium text-foreground">{user.customerName}</span>
-            </span>
+          <span className="hidden h-6 w-px bg-border sm:block" aria-hidden />
+          <span className="hidden text-sm sm:block">
+            <span className="block font-semibold leading-tight">{user.customerName}</span>
+            <span className="block text-xs text-muted-foreground">Customer portal · {user.contactName}</span>
+          </span>
+          <div className="ml-auto flex items-center gap-4">
+            <PortalNav />
             <form action={portalLogoutAction}>
               <Button type="submit" variant="outline" size="sm">
                 <LogOut /> Sign out
@@ -26,7 +28,10 @@ export default async function CustomerLayout({ children }: { children: React.Rea
           </div>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-[1100px] flex-1 px-4 py-6">{children}</main>
+      <main className="mx-auto w-full max-w-[1040px] flex-1 px-6 py-8">{children}</main>
+      <footer className="mx-auto w-full max-w-[1040px] px-6 pb-8 text-xs text-muted-foreground" data-print-hide>
+        Questions about a quotation? Use Messages and your sales representative will answer here.
+      </footer>
     </div>
   );
 }

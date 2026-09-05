@@ -1,4 +1,4 @@
-import { Check, Circle, CircleDot, RotateCcw, X } from "lucide-react";
+import { Check, RotateCcw, X } from "lucide-react";
 import type { ApprovalRequestStatus, ApprovalStepStatus, QuotationStatus } from "@/lib/contract";
 import { cn } from "@/lib/utils";
 
@@ -39,34 +39,43 @@ export function ApprovalStepper({
   ];
 
   return (
-    <ol className="space-y-3">
-      {items.map((it, i) => (
-        <li key={i} className="flex gap-3">
-          <span
-            className={cn(
-              "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full text-xs",
-              it.state === "done" && "bg-success/15 text-success",
-              it.state === "current" && "bg-warning/20 text-warning ring-2 ring-warning/40",
-              it.state === "failed" && "bg-destructive/10 text-destructive",
-              it.state === "returned" && "bg-warning/15 text-warning",
-              it.state === "todo" && "bg-muted text-muted-foreground",
-            )}
-          >
-            {it.state === "done" && <Check className="size-3.5" />}
-            {it.state === "current" && <CircleDot className="size-3.5" />}
-            {it.state === "failed" && <X className="size-3.5" />}
-            {it.state === "returned" && <RotateCcw className="size-3.5" />}
-            {it.state === "todo" && <Circle className="size-3" />}
-          </span>
-          <span className="min-w-0">
-            <span className={cn("block text-sm font-medium", it.state === "todo" && "text-muted-foreground")}>
-              {it.label}
-              {it.state === "current" ? <span className="ml-2 text-xs font-normal text-warning">waiting</span> : null}
+    <ol className="relative">
+      {items.map((it, i) => {
+        const last = i === items.length - 1;
+        return (
+          <li key={i} className="relative flex gap-3 pb-4 last:pb-0">
+            {!last ? (
+              <span
+                aria-hidden
+                className={cn("absolute top-6 left-3 h-[calc(100%-1.5rem)] w-px -translate-x-1/2", it.state === "done" ? "bg-success/40" : "bg-border")}
+              />
+            ) : null}
+            <span
+              className={cn(
+                "relative mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full text-xs",
+                it.state === "done" && "bg-success text-white",
+                it.state === "current" && "bg-card text-warning ring-2 ring-warning",
+                it.state === "failed" && "bg-destructive text-white",
+                it.state === "returned" && "bg-warning/15 text-warning ring-1 ring-warning/40",
+                it.state === "todo" && "bg-card text-muted-foreground ring-1 ring-border",
+              )}
+            >
+              {it.state === "done" && <Check className="size-3.5" strokeWidth={2.5} />}
+              {it.state === "current" && <span className="size-2 rounded-full bg-warning" />}
+              {it.state === "failed" && <X className="size-3.5" strokeWidth={2.5} />}
+              {it.state === "returned" && <RotateCcw className="size-3.5" />}
+              {it.state === "todo" && <span className="size-1.5 rounded-full bg-border" />}
             </span>
-            {it.detail ? <span className="block text-xs text-muted-foreground">{it.detail}</span> : null}
-          </span>
-        </li>
-      ))}
+            <span className="min-w-0 pt-0.5">
+              <span className={cn("block text-sm font-semibold", it.state === "todo" && "font-medium text-muted-foreground")}>
+                {it.label}
+                {it.state === "current" ? <span className="ml-2 text-xs font-medium text-warning">waiting</span> : null}
+              </span>
+              {it.detail ? <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">{it.detail}</span> : null}
+            </span>
+          </li>
+        );
+      })}
     </ol>
   );
 }

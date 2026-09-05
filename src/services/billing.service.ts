@@ -151,6 +151,7 @@ export async function recordPayment(input: RecordPaymentInput, user: SessionUser
     const actor = actorFromUser(user);
     assertActor(actor, "RECORD_PAYMENT");
     const existing = await tx.payment.findUnique({ where: { clientRef: input.clientRef }, include: { invoice: true } });
+    if (existing && existing.invoiceId !== input.invoiceId) throw new ConflictError("This payment reference was already used on another invoice");
     if (existing) {
       return { invoiceId: existing.invoiceId, status: existing.invoice.status, paidAmount: existing.invoice.paidAmount, due: existing.invoice.total - existing.invoice.paidAmount, duplicate: true };
     }
@@ -160,7 +161,12 @@ export async function recordPayment(input: RecordPaymentInput, user: SessionUser
     await tx.payment.create({
       data: { invoiceId: invoice.id, kind: "PAYMENT", amount: input.amount, method: input.method, clientRef: input.clientRef, reference: input.reference ?? null, note: input.note ?? null, createdById: user.id },
     });
-    await tx.invoice.update({ where: { id: invoice.id }, data: { paidAmount: next.paidAmount, status: next.status, paidAt: next.status === "PAID" ? new Date() : null } });
+    // Conditional on the paid amount we read: two simultaneous payments cannot overwrite each other.
+    const locked = await tx.invoice.updateMany({
+      where: { id: invoice.id, paidAmount: invoice.paidAmount, status: invoice.status },
+      data: { paidAmount: next.paidAmount, status: next.status, paidAt: next.status === "PAID" ? new Date() : null },
+    });
+    if (locked.count !== 1) throw new ConflictError("Another payment was recorded on this invoice just now. Refresh and try again.");
     await audit(tx, {
       entityType: "Invoice",
       entityId: invoice.id,
@@ -173,8 +179,12 @@ export async function recordPayment(input: RecordPaymentInput, user: SessionUser
 
     if (next.status === "PAID" && invoice.quotationId) {
       const open = await tx.invoice.count({ where: { quotationId: invoice.quotationId, status: { in: ["POSTED", "PARTIAL"] } } });
+      // Goods still waiting in a warehouse keep the order in FULFILLMENT; it becomes PAID once the last shipment leaves.
+      const waiting =
+        (await tx.shipment.count({ where: { plan: { quotationId: invoice.quotationId, status: "ACCEPTED" }, status: "RESERVED" } })) +
+        (await tx.fulfillmentPlan.count({ where: { quotationId: invoice.quotationId, status: "PROPOSED" } }));
       const q = await tx.quotation.findUniqueOrThrow({ where: { id: invoice.quotationId } });
-      if (open === 0 && (q.status === "CONFIRMED" || q.status === "FULFILLMENT")) {
+      if (open === 0 && waiting === 0 && (q.status === "CONFIRMED" || q.status === "FULFILLMENT")) {
         assertTransition(q.status, "RECORD_PAYMENT");
         await tx.quotation.update({ where: { id: q.id }, data: { status: "PAID" } });
         await audit(tx, { entityType: "Quotation", entityId: q.id, quotationId: q.id, action: "PAID", actor, before: { status: q.status }, after: { status: "PAID" } });

@@ -13,7 +13,7 @@ afterAll(async () => {
 
 describe("internal auth against the database", () => {
   it("authenticates a seeded user with demo1234 and reads the role from the row", async () => {
-    const meera = await authenticate("Meera@DF.local", "demo1234");
+    const meera = await authenticate("Meera@TEST.com", "demo1234");
     expect(meera).toMatchObject({ email: "meera@test.com", role: "SALES_MANAGER" });
     const riya = await authenticate("riya@test.com", "demo1234");
     expect(riya).toMatchObject({ role: "SALES_REP", managerId: meera!.id });
