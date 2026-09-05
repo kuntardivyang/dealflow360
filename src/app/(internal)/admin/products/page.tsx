@@ -1,8 +1,11 @@
 import { EmptyState, PageHeader } from "@/components/shared";
+import { requireUser } from "@/lib/auth/internal";
+import { BACKEND_ROLES } from "@/lib/contract";
 
 export const metadata = { title: "Products" };
 
-export default function Page() {
+export default async function Page() {
+  await requireUser(BACKEND_ROLES);
   return (
     <div className="space-y-6">
       <PageHeader title="Product catalog" description="Every product, variant and price list in one place." />
