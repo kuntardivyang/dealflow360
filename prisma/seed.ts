@@ -7,6 +7,7 @@ import { seedPlans } from "./seed/a-plans";
 import { seedQuotes } from "./seed/a-quotes";
 import { seedStock } from "./seed/a-stock";
 import { seedGovernance } from "./seed/b-governance";
+import { seedHistory } from "./seed/b-history";
 import { seedUsers } from "./seed/b-users";
 
 const db = new PrismaClient();
@@ -20,6 +21,7 @@ async function main() {
   await seedStock(db, catalogue);
   const plans = await seedPlans(db);
   await seedQuotes(db, catalogue, customers, plans, users);
+  await seedHistory(db, catalogue, customers, users); // B: deal-health histories
   console.log(`Seed complete in ${Date.now() - started} ms. Logins: *@df.local / demo1234, portal buyer@acme.com / demo1234`);
 }
 
