@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DataTable, EmptyState, Money, PageHeader, StatusBadge, type Column } from "@/components/shared";
+import { DataTable, EmptyState, Money, PageHeader, StatusBadge, type Column, AuditTrail } from "@/components/shared";
 import { overageBp } from "@/domain/money";
 import { scoreLines } from "@/domain/risk";
 import { riskPreview } from "@/domain/route";
@@ -270,27 +270,7 @@ export default async function QuotationDetailPage({
             {audit.length === 0 ? (
               <EmptyState title="No entries yet" />
             ) : (
-              <ul className="divide-y">
-                {audit.map((a) => (
-                  <li key={a.id} className="grid gap-1 py-3 text-sm sm:grid-cols-[160px_1fr]">
-                    <div className="text-muted-foreground">{formatDateTime(a.at)}</div>
-                    <div className="space-y-1">
-                      <p>
-                        <span className="font-medium">{a.actorName}</span>
-                        {a.actorRole ? <span className="text-muted-foreground"> ({a.actorRole.toLowerCase().replaceAll("_", " ")})</span> : null} ·{" "}
-                        <span className="font-mono text-xs">{a.action}</span> on {a.entityType.toLowerCase()} #{a.entityId}
-                      </p>
-                      {a.reason ? <p className="text-muted-foreground">Reason: {a.reason}</p> : null}
-                      {a.beforeJson !== null || a.afterJson !== null ? (
-                        <p className="font-mono text-xs text-muted-foreground break-all">
-                          {a.beforeJson !== null ? `before ${JSON.stringify(a.beforeJson)} ` : ""}
-                          {a.afterJson !== null ? `after ${JSON.stringify(a.afterJson)}` : ""}
-                        </p>
-                      ) : null}
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              <AuditTrail entries={audit} subject={q.number} />
             )}
           </CardContent>
         </Card>
