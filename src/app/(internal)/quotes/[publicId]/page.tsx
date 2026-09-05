@@ -16,6 +16,7 @@ import { formatBp, formatDateTime, formatPoints } from "@/lib/format";
 import { canTransition } from "@/lib/state";
 import { cn } from "@/lib/utils";
 import { loadRiskWeights, loadRoutingRules } from "@/services/quotation.service";
+import { suggestFor } from "@/services/upsell.service";
 import { confirmOnBehalfForm, reviseQuotationForm, sendToCustomerForm } from "../../actions/quotation";
 import { Builder, type BuilderLine, type PickerProduct } from "./_components/builder";
 import { RiskCard, chainLabel } from "./_components/risk-card";
@@ -87,6 +88,8 @@ export default async function QuotationDetailPage({
         isPromoted: p.isPromoted,
       }))
     : [];
+
+  const suggestions = canEdit ? await suggestFor(q.id) : [];
 
   const audit = tab === "audit" ? await prisma.auditLog.findMany({ where: { quotationId: q.id }, orderBy: { at: "desc" }, take: 100 }) : [];
 
@@ -292,7 +295,15 @@ export default async function QuotationDetailPage({
           </CardContent>
         </Card>
       ) : canEdit ? (
-        <Builder key={`${q.version}-${q.updatedAt.getTime()}`} quotationId={q.id} lines={builderLines} products={products} orderDiscountBp={q.orderDiscountBp} initialView={initialView} />
+        <Builder
+          key={`${q.version}-${q.updatedAt.getTime()}`}
+          quotationId={q.id}
+          lines={builderLines}
+          products={products}
+          suggestions={suggestions.map((s) => ({ productId: s.productId, name: s.name, category: s.category, listPrice: s.listPrice, unit: s.unit, marginDelta: s.marginDelta, isPromoted: s.isPromoted, reason: s.reason }))}
+          orderDiscountBp={q.orderDiscountBp}
+          initialView={initialView}
+        />
       ) : (
         <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
           <section className="space-y-2">

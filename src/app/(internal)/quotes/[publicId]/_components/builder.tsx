@@ -6,7 +6,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Minus, Plus, Trash2 } from "lucide-react";
+import { Minus, Plus, Sparkles, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -32,6 +32,7 @@ export type BuilderLine = {
 };
 export type PickerProduct = { id: number; name: string; category: string; kind: string; listPrice: number; unit: string; isPromoted: boolean };
 export type BuilderView = { totals: Totals; risk: RiskPreview | null; version: number };
+export type UpsellSuggestion = { productId: number; name: string; category: string; listPrice: number; unit: string; marginDelta: number; isPromoted: boolean; reason: string };
 
 const percentToBp = (s: string): number | null => {
   const n = Number(s);
@@ -43,12 +44,14 @@ export function Builder({
   quotationId,
   lines,
   products,
+  suggestions,
   orderDiscountBp,
   initialView,
 }: {
   quotationId: number;
   lines: BuilderLine[];
   products: PickerProduct[];
+  suggestions: UpsellSuggestion[];
   orderDiscountBp: number;
   initialView: BuilderView;
 }) {
@@ -57,6 +60,8 @@ export function Builder({
   const [orderDiscount, setOrderDiscount_] = useState(String(orderDiscountBp / 100));
   const [drafts, setDrafts] = useState<Record<number, string>>({});
   const [category, setCategory] = useState<string>("All");
+  const [dismissed, setDismissed] = useState<number[]>([]);
+  const visibleSuggestions = suggestions.filter((s) => !dismissed.includes(s.productId));
   const [pending, start] = useTransition();
 
   const categories = ["All", ...Array.from(new Set(products.map((p) => p.category)))];
@@ -303,6 +308,42 @@ export function Builder({
           </CardContent>
         </Card>
         <RiskCard risk={view.risk} hasLines={hasLines} />
+        <Card>
+          <CardHeader className="flex-row items-center gap-2">
+            <Sparkles className="size-4 text-primary" />
+            <CardTitle className="text-base">Upsell and Cross-Sell</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {visibleSuggestions.length === 0 ? (
+              <p className="text-muted-foreground">No suggestions right now.</p>
+            ) : (
+              visibleSuggestions.map((s) => (
+                <div key={s.productId} className="rounded-lg border p-2.5">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">
+                        {s.name} {s.isPromoted ? <StatusBadge status="PROMO" label="Promo" className="ml-1" /> : null}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{s.reason}</p>
+                    </div>
+                    <button type="button" aria-label="Dismiss" className="text-muted-foreground hover:text-foreground" onClick={() => setDismissed((d) => [...d, s.productId])}>
+                      <X className="size-4" />
+                    </button>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between gap-2">
+                    <span className="text-xs">
+                      <Money paise={s.listPrice} /> · margin <Money paise={s.marginDelta} signed className="font-medium text-success" /> each
+                    </span>
+                    <Button size="sm" disabled={pending} onClick={() => run(addLine({ quotationId, version: view.version, productId: s.productId, qty: 1, discountBp: 0, source: "UPSELL" }))}>
+                      <Plus /> Add to Quote
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+            <p className="text-xs text-muted-foreground">Ranked by co-purchase history and promotions; low-margin products are hidden. Totals and margin update on add.</p>
+          </CardContent>
+        </Card>
         <Button className="w-full" size="lg" disabled={pending || !hasLines} onClick={confirm}>
           Confirm
         </Button>
