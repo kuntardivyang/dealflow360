@@ -28,10 +28,14 @@ const dateTimeFmt = new Intl.DateTimeFormat("en-IN", {
   hour12: false,
 });
 
+const CALENDAR_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
 /** 52800000 -> "₹5,28,000.00" */
 export function formatMoney(paise: number): string {
   return inr.format(paise / 100);
 }
+/** Alias used by the quote engine screens. */
+export const formatPaise = formatMoney;
 
 /** 52800000 -> "₹5.3L" (tiles and cards). */
 export function formatMoneyCompact(paise: number): string {
@@ -48,11 +52,20 @@ export function formatBp(bp: number | null | undefined, fallback = "n/a"): strin
 export function formatPoints(bp: number): string {
   return `${number.format(bp / 100)} pt`;
 }
+/** Compact form for badges: 800 -> "8pt". */
+export function formatPt(bp: number): string {
+  return `${number.format(bp / 100)}pt`;
+}
 
-/** A calendar date string ("2026-09-05") or a timestamp -> "05 Sept 2026". */
+/**
+ * A calendar date ("2026-09-05") is shown as that day, never shifted by a time zone.
+ * A timestamp (Date or ISO string) is shown as its Asia/Kolkata day.
+ */
 export function formatDate(value: string | Date | null | undefined): string {
   if (!value) return "–";
-  if (typeof value === "string") return dateFmtUtc.format(new Date(`${value}T00:00:00Z`));
+  if (typeof value === "string") {
+    return CALENDAR_DATE.test(value) ? dateFmtUtc.format(new Date(`${value}T00:00:00Z`)) : dateFmt.format(new Date(value));
+  }
   return dateFmt.format(value);
 }
 

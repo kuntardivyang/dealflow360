@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { daysBetween, formatBp, formatDate, formatMoney, formatPoints, initials } from "@/lib/format";
+import { daysBetween, formatBp, formatDate, formatMoney, formatPaise, formatPoints, formatPt, initials } from "@/lib/format";
 
 describe("format", () => {
   it("formats integer paise as INR with Indian grouping", () => {
@@ -13,11 +13,14 @@ describe("format", () => {
     expect(formatBp(1200)).toBe("12%");
     expect(formatBp(null)).toBe("n/a");
     expect(formatPoints(800)).toBe("8 pt");
+    expect(formatPt(800)).toBe("8pt");
+    expect(formatPaise(52800000)).toBe(formatMoney(52800000));
   });
 
   it("formats calendar dates without shifting the day", () => {
     expect(formatDate("2026-09-05")).toMatch(/05 Sep\w* 2026/);
     expect(formatDate(null)).toBe("–");
+    expect(formatDate("2026-09-05T20:30:00Z")).toMatch(/06 Sep\w* 2026/);
   });
 
   it("counts whole days and builds initials", () => {
