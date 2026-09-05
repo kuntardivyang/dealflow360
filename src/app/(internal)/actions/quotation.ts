@@ -8,6 +8,7 @@ import {
   addLineSchema,
   confirmOnBehalfSchema,
   confirmQuotationSchema,
+  createCustomerSchema,
   createQuotationSchema,
   reviseQuotationSchema,
   ok,
@@ -166,4 +167,25 @@ export async function confirmOnBehalfForm(formData: FormData): Promise<void> {
   const publicId = String(formData.get("publicId") ?? "");
   const r = await confirmOnBehalf({ quotationId: formData.get("quotationId"), version: formData.get("version"), customerName: formData.get("customerName") });
   redirect(`${QUOTES}/${publicId}${r.ok ? "" : `?error=${encodeURIComponent(r.message)}`}`);
+}
+
+/** Form action behind "New customer" on the quotations page: creates the customer and opens a draft for it. */
+export async function createCustomerAndQuote(formData: FormData): Promise<void> {
+  const p = parseInput(createCustomerSchema, {
+    name: formData.get("name"),
+    tierId: formData.get("tierId"),
+    city: formData.get("city") || undefined,
+    contactName: formData.get("contactName"),
+    contactEmail: formData.get("contactEmail"),
+  });
+  if (!p.ok) redirect(`${QUOTES}?error=${encodeURIComponent(`${p.message} ${Object.values(p.fieldErrors ?? {}).flat().join(" ")}`)}`);
+  let customerId: number;
+  try {
+    customerId = (await quotations.createCustomer(p.data, await requireActionUser())).id;
+  } catch (e) {
+    redirect(`${QUOTES}?error=${encodeURIComponent(toActionError(e).message)}`);
+  }
+  const result = await createQuotation({ customerId });
+  if (!result.ok) redirect(`${QUOTES}?error=${encodeURIComponent(result.message)}`);
+  redirect(`${QUOTES}/${result.data.publicId}`);
 }

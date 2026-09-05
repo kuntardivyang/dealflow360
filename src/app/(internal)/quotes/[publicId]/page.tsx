@@ -298,6 +298,7 @@ export default async function QuotationDetailPage({
         <Builder
           key={`${q.version}-${q.updatedAt.getTime()}`}
           quotationId={q.id}
+          status={q.status}
           lines={builderLines}
           products={products}
           suggestions={suggestions.map((s) => ({ productId: s.productId, name: s.name, category: s.category, listPrice: s.listPrice, unit: s.unit, marginDelta: s.marginDelta, isPromoted: s.isPromoted, reason: s.reason }))}

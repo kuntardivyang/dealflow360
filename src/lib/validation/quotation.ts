@@ -60,3 +60,13 @@ export type ReviseQuotationInput = z.infer<typeof reviseQuotationSchema>;
 export type ConfirmOnBehalfInput = z.infer<typeof confirmOnBehalfSchema>;
 export type SendToCustomerInput = z.infer<typeof sendToCustomerSchema>;
 export type RespondToRequestInput = z.infer<typeof respondToRequestSchema>;
+
+/** A rep adds a customer while quoting: name, tier and the portal contact. Portal password defaults to demo1234. */
+export const createCustomerSchema = z.object({
+  name: z.string().trim().min(2, "Company name is too short").max(120),
+  tierId: zId,
+  city: z.string().trim().max(80).optional(),
+  contactName: z.string().trim().min(2, "Contact name is too short").max(120),
+  contactEmail: z.string().trim().toLowerCase().email("Enter a valid email"),
+});
+export type CreateCustomerInput = z.infer<typeof createCustomerSchema>;
