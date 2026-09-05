@@ -1,14 +1,14 @@
-// Screen 4, Quotation detail. Read-only view of lines, totals and the risk preview.
-// The interactive builder (feature 34) replaces the lines table in the next cycle.
+// Owner: A. Screen 4, Quotation detail. Read-only view of lines, totals and the approval
+// preview; the interactive builder (feature 34) replaces the lines card next.
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArrowLeft } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { DataTable, EmptyState, Money, PageHeader, StatusBadge, type Column } from "@/components/shared";
 import { overageBp } from "@/domain/money";
 import type { RiskPreview } from "@/lib/contract";
 import { prisma } from "@/lib/db";
-import { formatBp, formatDateTime, formatPaise, formatPt } from "@/lib/format";
-import { QuotationStatusBadge } from "../_components/status-badge";
+import { formatBp, formatDateTime, formatPoints } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -25,76 +25,56 @@ export default async function QuotationDetailPage({ params }: { params: Promise<
   if (!q) notFound();
   const risk = (q.riskBreakdown as unknown as RiskPreview | null) ?? null;
 
-  return (
-    <main className="mx-auto max-w-6xl space-y-6 p-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-1">
-          <Link href="/quotes" className="text-xs text-muted-foreground hover:underline">
-            ← Quotations
-          </Link>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            {q.number} · {q.customer.name}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {q.customer.tier.name} tier (ceiling {formatBp(q.customer.tier.discountCeilingBp)}) · Rep {q.rep.name} · Last activity{" "}
-            {formatDateTime(q.lastActivityAt)}
+  type Line = (typeof q.lines)[number];
+  const columns: Column<Line>[] = [
+    {
+      key: "product",
+      header: "Product",
+      cell: (l) => (
+        <div>
+          <p className="font-medium">{l.description}</p>
+          <p className="text-xs text-muted-foreground">
+            {l.product.category.name}
+            {l.plan ? ` · ${l.plan.name}` : ""}
           </p>
         </div>
-        <QuotationStatusBadge status={q.status} />
-      </header>
+      ),
+    },
+    { key: "qty", header: "Qty", align: "right", cell: (l) => <span className="tabular-nums">{l.qty}</span> },
+    { key: "price", header: "Price", align: "right", cell: (l) => <Money paise={l.unitPrice} /> },
+    { key: "discount", header: "Discount", align: "right", cell: (l) => <span className="tabular-nums">{formatBp(l.effectiveDiscountBp)}</span> },
+    { key: "limit", header: "Limit", align: "right", cell: (l) => <span className="tabular-nums">{formatBp(l.ceilingBp)}</span> },
+    {
+      key: "status",
+      header: "Status",
+      cell: (l) => {
+        const over = overageBp(l.effectiveDiscountBp, l.ceilingBp);
+        return over > 0 ? <StatusBadge status="OVER" label={`Over +${formatPoints(over)}`} /> : <StatusBadge status="OK" />;
+      },
+    },
+    { key: "total", header: "Total", align: "right", cell: (l) => <Money paise={l.total} /> },
+  ];
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Order lines</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {q.lines.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No lines yet.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Product</TableHead>
-                  <TableHead className="text-right">Qty</TableHead>
-                  <TableHead className="text-right">Price</TableHead>
-                  <TableHead className="text-right">Discount</TableHead>
-                  <TableHead className="text-right">Limit</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {q.lines.map((l) => {
-                  const over = overageBp(l.effectiveDiscountBp, l.ceilingBp);
-                  return (
-                    <TableRow key={l.id}>
-                      <TableCell>
-                        <p className="font-medium">{l.description}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {l.product.category.name}
-                          {l.plan ? ` · ${l.plan.name}` : ""}
-                        </p>
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{l.qty}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatPaise(l.unitPrice)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatBp(l.effectiveDiscountBp)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatBp(l.ceilingBp)}</TableCell>
-                      <TableCell>
-                        {over > 0 ? (
-                          <span className="rounded bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">OVER (+{formatPt(over)})</span>
-                        ) : (
-                          <span className="rounded bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">OK</span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{formatPaise(l.total)}</TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+  return (
+    <div className="space-y-6">
+      <Link href="/quotes" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+        <ArrowLeft className="size-4" /> Quotations
+      </Link>
+      <PageHeader
+        title={`${q.number} · ${q.customer.name}`}
+        description={`${q.customer.tier.name} tier (ceiling ${formatBp(q.customer.tier.discountCeilingBp)}) · Rep ${q.rep.name} · Last activity ${formatDateTime(q.lastActivityAt)}`}
+        actions={<StatusBadge status={q.status} className="h-6 px-3 text-sm" />}
+      />
+
+      <section className="space-y-2">
+        <h2 className="text-sm font-medium text-muted-foreground">Order lines</h2>
+        <DataTable
+          columns={columns}
+          rows={q.lines}
+          rowKey={(l) => l.id}
+          empty={<EmptyState title="No lines yet" description="The builder to add products arrives with the next merge." />}
+        />
+      </section>
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
@@ -102,19 +82,19 @@ export default async function QuotationDetailPage({ params }: { params: Promise<
             <CardTitle className="text-base">Totals</CardTitle>
           </CardHeader>
           <CardContent>
-            <dl className="grid grid-cols-2 gap-y-1 text-sm tabular-nums">
+            <dl className="grid grid-cols-2 gap-y-1 text-sm">
               <dt className="text-muted-foreground">Gross</dt>
-              <dd className="text-right">{formatPaise(q.grossTotal)}</dd>
+              <dd className="text-right"><Money paise={q.grossTotal} /></dd>
               <dt className="text-muted-foreground">Discount{q.orderDiscountBp ? ` (order ${formatBp(q.orderDiscountBp)})` : ""}</dt>
-              <dd className="text-right">− {formatPaise(q.discountTotal)}</dd>
+              <dd className="text-right">− <Money paise={q.discountTotal} /></dd>
               <dt className="text-muted-foreground">Net</dt>
-              <dd className="text-right">{formatPaise(q.netTotal)}</dd>
+              <dd className="text-right"><Money paise={q.netTotal} /></dd>
               <dt className="text-muted-foreground">Tax</dt>
-              <dd className="text-right">{formatPaise(q.taxTotal)}</dd>
+              <dd className="text-right"><Money paise={q.taxTotal} /></dd>
               <dt className="font-medium">Total</dt>
-              <dd className="text-right font-semibold">{formatPaise(q.total)}</dd>
+              <dd className="text-right font-semibold"><Money paise={q.total} /></dd>
               <dt className="text-muted-foreground">Margin</dt>
-              <dd className="text-right">{q.marginBp === null ? "n/a" : formatBp(q.marginBp)}</dd>
+              <dd className="text-right tabular-nums">{formatBp(q.marginBp)}</dd>
             </dl>
           </CardContent>
         </Card>
@@ -127,16 +107,18 @@ export default async function QuotationDetailPage({ params }: { params: Promise<
               <p className="text-muted-foreground">Add lines to see the blended risk score.</p>
             ) : (
               <>
-                <p>
-                  Blended risk <span className="font-semibold">{risk.score}</span> / 100 · {risk.band}
+                <p className="flex items-center gap-2">
+                  Blended risk <span className="text-lg font-semibold tabular-nums">{risk.score}</span>
+                  <span className="text-muted-foreground">/ 100</span>
+                  <StatusBadge status={risk.band} />
                 </p>
                 <dl className="grid grid-cols-2 gap-y-1 tabular-nums">
                   <dt className="text-muted-foreground">Worst line overage</dt>
-                  <dd className="text-right">{formatPt(risk.worstOverageBp)}</dd>
+                  <dd className="text-right">{formatPoints(risk.worstOverageBp)}</dd>
                   <dt className="text-muted-foreground">Blended overage</dt>
-                  <dd className="text-right">{formatPt(risk.blendedOverageBp)}</dd>
+                  <dd className="text-right">{formatPoints(risk.blendedOverageBp)}</dd>
                   <dt className="text-muted-foreground">Margin penalty</dt>
-                  <dd className="text-right">{formatPt(risk.marginPenaltyBp)}</dd>
+                  <dd className="text-right">{formatPoints(risk.marginPenaltyBp)}</dd>
                 </dl>
                 <p className="text-muted-foreground">
                   {risk.chain.length === 0
@@ -148,6 +130,6 @@ export default async function QuotationDetailPage({ params }: { params: Promise<
           </CardContent>
         </Card>
       </div>
-    </main>
+    </div>
   );
 }
