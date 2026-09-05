@@ -6,7 +6,9 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import {
   addLineSchema,
+  confirmQuotationSchema,
   createQuotationSchema,
+  reviseQuotationSchema,
   ok,
   parseInput,
   removeLineSchema,
@@ -14,11 +16,12 @@ import {
   toActionError,
   updateLineSchema,
   type ActionResult,
+  type ConfirmOutcome,
   type QuotationRef,
   type QuotationTotalsView,
 } from "@/lib/contract";
 import * as quotations from "@/services/quotation.service";
-import { currentUser } from "./_current-user";
+import { requireActionUser } from "@/lib/auth/internal";
 
 const QUOTES = "/quotes";
 
@@ -26,7 +29,7 @@ export async function createQuotation(input: unknown): Promise<ActionResult<Quot
   const p = parseInput(createQuotationSchema, input);
   if (!p.ok) return p;
   try {
-    const ref = await quotations.createQuotation(p.data, await currentUser());
+    const ref = await quotations.createQuotation(p.data, await requireActionUser());
     revalidatePath(QUOTES);
     return ok(ref);
   } catch (e) {
@@ -45,7 +48,7 @@ export async function addLine(input: unknown): Promise<ActionResult<QuotationTot
   const p = parseInput(addLineSchema, input);
   if (!p.ok) return p;
   try {
-    const view = await quotations.addLine(p.data, await currentUser());
+    const view = await quotations.addLine(p.data, await requireActionUser());
     revalidatePath(QUOTES);
     return ok(view);
   } catch (e) {
@@ -57,7 +60,7 @@ export async function updateLine(input: unknown): Promise<ActionResult<Quotation
   const p = parseInput(updateLineSchema, input);
   if (!p.ok) return p;
   try {
-    const view = await quotations.updateLine(p.data, await currentUser());
+    const view = await quotations.updateLine(p.data, await requireActionUser());
     revalidatePath(QUOTES);
     return ok(view);
   } catch (e) {
@@ -69,7 +72,7 @@ export async function removeLine(input: unknown): Promise<ActionResult<Quotation
   const p = parseInput(removeLineSchema, input);
   if (!p.ok) return p;
   try {
-    const view = await quotations.removeLine(p.data, await currentUser());
+    const view = await quotations.removeLine(p.data, await requireActionUser());
     revalidatePath(QUOTES);
     return ok(view);
   } catch (e) {
@@ -81,10 +84,44 @@ export async function setOrderDiscount(input: unknown): Promise<ActionResult<Quo
   const p = parseInput(setOrderDiscountSchema, input);
   if (!p.ok) return p;
   try {
-    const view = await quotations.setOrderDiscount(p.data, await currentUser());
+    const view = await quotations.setOrderDiscount(p.data, await requireActionUser());
     revalidatePath(QUOTES);
     return ok(view);
   } catch (e) {
     return toActionError(e);
   }
+}
+
+/** The only way a quotation leaves DRAFT. Routing decides APPROVED or PENDING_APPROVAL. */
+export async function confirmQuotation(input: unknown): Promise<ActionResult<ConfirmOutcome>> {
+  const p = parseInput(confirmQuotationSchema, input);
+  if (!p.ok) return p;
+  try {
+    const outcome = await quotations.confirmQuotation(p.data, await requireActionUser());
+    revalidatePath(QUOTES);
+    revalidatePath("/approvals");
+    return ok(outcome);
+  } catch (e) {
+    return toActionError(e);
+  }
+}
+
+export async function reviseQuotation(input: unknown): Promise<ActionResult<QuotationRef>> {
+  const p = parseInput(reviseQuotationSchema, input);
+  if (!p.ok) return p;
+  try {
+    const ref = await quotations.reviseQuotation(p.data, await requireActionUser());
+    revalidatePath(QUOTES);
+    return ok(ref);
+  } catch (e) {
+    return toActionError(e);
+  }
+}
+
+/** Form action behind the Revise button on a rejected quotation. */
+export async function reviseQuotationForm(formData: FormData): Promise<void> {
+  const result = await reviseQuotation({ quotationId: formData.get("quotationId"), version: formData.get("version") });
+  const publicId = String(formData.get("publicId") ?? "");
+  if (!result.ok) redirect(`${QUOTES}/${publicId}?error=${encodeURIComponent(result.message)}`);
+  redirect(`${QUOTES}/${publicId}`);
 }

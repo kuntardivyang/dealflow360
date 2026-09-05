@@ -1,46 +1,121 @@
-// Owner: A. Screen 4, Quotation detail. Read-only view of lines, totals and the approval
-// preview; the interactive builder (feature 34) replaces the lines card next.
+// Owner: A. Screen 4, Quotation detail: the builder (feature 34) while the quotation is
+// editable, a read-only view otherwise, the approval preview (35) and the audit trail (38).
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DataTable, EmptyState, Money, PageHeader, StatusBadge, type Column } from "@/components/shared";
 import { overageBp } from "@/domain/money";
+import { scoreLines } from "@/domain/risk";
+import { riskPreview } from "@/domain/route";
+import { requireUser } from "@/lib/auth/internal";
 import type { RiskPreview } from "@/lib/contract";
 import { prisma } from "@/lib/db";
 import { formatBp, formatDateTime, formatPoints } from "@/lib/format";
+import { canTransition } from "@/lib/state";
+import { cn } from "@/lib/utils";
 import { loadRiskWeights, loadRoutingRules } from "@/services/quotation.service";
-import { previewRisk } from "@/services/risk-preview";
+import { reviseQuotationForm } from "../../actions/quotation";
+import { Builder, type BuilderLine, type PickerProduct } from "./_components/builder";
+import { RiskCard, chainLabel } from "./_components/risk-card";
 
 export const dynamic = "force-dynamic";
 
-export default async function QuotationDetailPage({ params }: { params: Promise<{ publicId: string }> }) {
-  const { publicId } = await params;
+const ROLE_LABEL: Record<string, string> = { SALES_MANAGER: "Sales Manager", FINANCE: "Finance" };
+
+export default async function QuotationDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ publicId: string }>;
+  searchParams: Promise<{ tab?: string; error?: string }>;
+}) {
+  const [{ publicId }, sp] = await Promise.all([params, searchParams]);
+  const user = await requireUser(undefined, `/quotes/${publicId}`);
   const q = await prisma.quotation.findUnique({
     where: { publicId },
     include: {
       customer: { include: { tier: true } },
       rep: true,
       lines: { orderBy: { sortOrder: "asc" }, include: { product: { include: { category: true } }, plan: true } },
+      approvalRequests: { orderBy: { version: "desc" }, take: 1, include: { steps: { orderBy: { stepNo: "asc" }, include: { actedBy: true } } } },
     },
   });
   if (!q) notFound();
-  // Seeded quotations carry no stored breakdown until their first edit: compute it on the fly.
+
+  const tab = sp.tab === "audit" ? "audit" : "lines";
+  const canEdit = canTransition(q.status, "EDIT_LINES") && (q.repUserId === user.id || user.role === "ADMIN");
+  const request = q.approvalRequests[0] ?? null;
+
   const stored = (q.riskBreakdown as unknown as RiskPreview | null) ?? null;
   const risk =
     stored ??
     (q.lines.length > 0
-      ? previewRisk(
-          q.lines.map((l) => ({ lineId: l.id, effectiveDiscountBp: l.effectiveDiscountBp, ceilingBp: l.ceilingBp, gross: l.gross })),
-          q.marginBp,
+      ? riskPreview(
+          scoreLines(
+            q.lines.map((l) => ({ lineId: l.id, effectiveDiscountBp: l.effectiveDiscountBp, ceilingBp: l.ceilingBp, gross: l.gross })),
+            q.marginBp,
+            await loadRiskWeights(prisma),
+          ),
           q.total,
-          await loadRiskWeights(prisma),
           await loadRoutingRules(prisma),
         )
       : null);
 
+  const builderLines: BuilderLine[] = q.lines.map((l) => ({
+    id: l.id,
+    description: l.description,
+    category: l.product.category.name,
+    plan: l.plan?.name ?? null,
+    qty: l.qty,
+    unitPrice: l.unitPrice,
+    discountBp: l.discountBp,
+    effectiveDiscountBp: l.effectiveDiscountBp,
+    ceilingBp: l.ceilingBp,
+    total: l.total,
+  }));
+
+  const products: PickerProduct[] = canEdit
+    ? (await prisma.product.findMany({ where: { archivedAt: null }, include: { category: true }, orderBy: [{ category: { sortOrder: "asc" } }, { name: "asc" }] })).map((p) => ({
+        id: p.id,
+        name: p.name,
+        category: p.category.name,
+        kind: p.kind,
+        listPrice: p.listPrice,
+        unit: p.unit,
+        isPromoted: p.isPromoted,
+      }))
+    : [];
+
+  const audit = tab === "audit" ? await prisma.auditLog.findMany({ where: { quotationId: q.id }, orderBy: { at: "desc" }, take: 100 }) : [];
+
+  const initialView = {
+    totals: {
+      lines: q.lines.map((l) => ({
+        lineId: l.id,
+        effectiveDiscountBp: l.effectiveDiscountBp,
+        gross: l.gross,
+        discountAmount: l.discountAmount,
+        net: l.net,
+        tax: l.tax,
+        total: l.total,
+        cost: l.unitCost * l.qty,
+      })),
+      grossTotal: q.grossTotal,
+      discountTotal: q.discountTotal,
+      netTotal: q.netTotal,
+      taxTotal: q.taxTotal,
+      total: q.total,
+      costTotal: q.costTotal,
+      marginBp: q.marginBp,
+    },
+    risk,
+    version: q.version,
+  };
+
   type Line = (typeof q.lines)[number];
-  const columns: Column<Line>[] = [
+  const readColumns: Column<Line>[] = [
     {
       key: "product",
       header: "Product",
@@ -69,6 +144,15 @@ export default async function QuotationDetailPage({ params }: { params: Promise<
     { key: "total", header: "Total", align: "right", cell: (l) => <Money paise={l.total} /> },
   ];
 
+  const tabLink = (t: "lines" | "audit", label: string) => (
+    <Link
+      href={`/quotes/${publicId}${t === "audit" ? "?tab=audit" : ""}`}
+      className={cn("border-b-2 px-3 py-2 text-sm font-medium", tab === t ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground")}
+    >
+      {label}
+    </Link>
+  );
+
   return (
     <div className="space-y-6">
       <Link href="/quotes" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
@@ -77,73 +161,126 @@ export default async function QuotationDetailPage({ params }: { params: Promise<
       <PageHeader
         title={`${q.number} · ${q.customer.name}`}
         description={`${q.customer.tier.name} tier (ceiling ${formatBp(q.customer.tier.discountCeilingBp)}) · Rep ${q.rep.name} · Last activity ${formatDateTime(q.lastActivityAt)}`}
-        actions={<StatusBadge status={q.status} className="h-6 px-3 text-sm" />}
+        actions={
+          <>
+            <StatusBadge status={q.status} className="h-6 px-3 text-sm" />
+            {q.status === "REJECTED" && (q.repUserId === user.id || user.role === "ADMIN") ? (
+              <form action={reviseQuotationForm}>
+                <input type="hidden" name="quotationId" value={q.id} />
+                <input type="hidden" name="version" value={q.version} />
+                <input type="hidden" name="publicId" value={q.publicId} />
+                <Button type="submit" variant="outline">
+                  Revise
+                </Button>
+              </form>
+            ) : null}
+          </>
+        }
       />
 
-      <section className="space-y-2">
-        <h2 className="text-sm font-medium text-muted-foreground">Order lines</h2>
-        <DataTable
-          columns={columns}
-          rows={q.lines}
-          rowKey={(l) => l.id}
-          empty={<EmptyState title="No lines yet" description="The builder to add products arrives with the next merge." />}
-        />
-      </section>
+      {sp.error ? <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{sp.error}</p> : null}
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Totals</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <dl className="grid grid-cols-2 gap-y-1 text-sm">
-              <dt className="text-muted-foreground">Gross</dt>
-              <dd className="text-right"><Money paise={q.grossTotal} /></dd>
-              <dt className="text-muted-foreground">Discount{q.orderDiscountBp ? ` (order ${formatBp(q.orderDiscountBp)})` : ""}</dt>
-              <dd className="text-right">− <Money paise={q.discountTotal} /></dd>
-              <dt className="text-muted-foreground">Net</dt>
-              <dd className="text-right"><Money paise={q.netTotal} /></dd>
-              <dt className="text-muted-foreground">Tax</dt>
-              <dd className="text-right"><Money paise={q.taxTotal} /></dd>
-              <dt className="font-medium">Total</dt>
-              <dd className="text-right font-semibold"><Money paise={q.total} /></dd>
-              <dt className="text-muted-foreground">Margin</dt>
-              <dd className="text-right tabular-nums">{formatBp(q.marginBp)}</dd>
-            </dl>
+      {request && q.status === "PENDING_APPROVAL" ? (
+        <Card className="border-warning/40 bg-warning/5">
+          <CardContent className="flex flex-wrap items-center gap-4 p-4 text-sm">
+            <span className="font-medium">Awaiting approval, round {request.version}</span>
+            <ol className="flex flex-wrap items-center gap-2">
+              {request.steps.map((s) => (
+                <li key={s.id} className="flex items-center gap-1">
+                  <StatusBadge status={s.status} label={`${ROLE_LABEL[s.requiredRole] ?? s.requiredRole}: ${s.status.toLowerCase()}`} />
+                </li>
+              ))}
+            </ol>
+            <span className="text-muted-foreground">Blended risk {request.riskScore}. Approvers act from the Approvals tab.</span>
           </CardContent>
         </Card>
+      ) : null}
+      {q.status === "REJECTED" && request ? (
+        <Card className="border-destructive/40 bg-destructive/5">
+          <CardContent className="p-4 text-sm">
+            <span className="font-medium">Rejected.</span> {request.reason ?? "See the audit trail for the reason."} Press Revise to edit and confirm again.
+          </CardContent>
+        </Card>
+      ) : null}
+      {q.status === "APPROVED" ? (
+        <Card className="border-success/40 bg-success/5">
+          <CardContent className="p-4 text-sm">
+            <span className="font-medium">Approved.</span> Routing needed {request ? chainLabel(request.chain as string[]) : "no approval"}. Sending to the customer arrives with the next merge.
+          </CardContent>
+        </Card>
+      ) : null}
+
+      <nav className="flex border-b" aria-label="Sections">
+        {tabLink("lines", "Lines and totals")}
+        {tabLink("audit", "Audit trail")}
+      </nav>
+
+      {tab === "audit" ? (
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Approval preview</CardTitle>
+            <CardTitle className="text-base">Audit trail</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            {!risk || q.lines.length === 0 ? (
-              <p className="text-muted-foreground">Add lines to see the blended risk score.</p>
+          <CardContent>
+            {audit.length === 0 ? (
+              <EmptyState title="No entries yet" />
             ) : (
-              <>
-                <p className="flex items-center gap-2">
-                  Blended risk <span className="text-lg font-semibold tabular-nums">{risk.score}</span>
-                  <span className="text-muted-foreground">/ 100</span>
-                  <StatusBadge status={risk.band} />
-                </p>
-                <dl className="grid grid-cols-2 gap-y-1 tabular-nums">
-                  <dt className="text-muted-foreground">Worst line overage</dt>
-                  <dd className="text-right">{formatPoints(risk.worstOverageBp)}</dd>
-                  <dt className="text-muted-foreground">Blended overage</dt>
-                  <dd className="text-right">{formatPoints(risk.blendedOverageBp)}</dd>
-                  <dt className="text-muted-foreground">Margin penalty</dt>
-                  <dd className="text-right">{formatPoints(risk.marginPenaltyBp)}</dd>
-                </dl>
-                <p className="text-muted-foreground">
-                  {risk.chain.length === 0
-                    ? "Within every limit: confirm goes straight through."
-                    : `Confirm will route to: ${risk.chain.map((r) => (r === "SALES_MANAGER" ? "Sales Manager" : "Finance")).join(" → ")}`}
-                </p>
-              </>
+              <ul className="divide-y">
+                {audit.map((a) => (
+                  <li key={a.id} className="grid gap-1 py-3 text-sm sm:grid-cols-[160px_1fr]">
+                    <div className="text-muted-foreground">{formatDateTime(a.at)}</div>
+                    <div className="space-y-1">
+                      <p>
+                        <span className="font-medium">{a.actorName}</span>
+                        {a.actorRole ? <span className="text-muted-foreground"> ({a.actorRole.toLowerCase().replaceAll("_", " ")})</span> : null} ·{" "}
+                        <span className="font-mono text-xs">{a.action}</span> on {a.entityType.toLowerCase()} #{a.entityId}
+                      </p>
+                      {a.reason ? <p className="text-muted-foreground">Reason: {a.reason}</p> : null}
+                      {a.beforeJson !== null || a.afterJson !== null ? (
+                        <p className="font-mono text-xs text-muted-foreground break-all">
+                          {a.beforeJson !== null ? `before ${JSON.stringify(a.beforeJson)} ` : ""}
+                          {a.afterJson !== null ? `after ${JSON.stringify(a.afterJson)}` : ""}
+                        </p>
+                      ) : null}
+                    </div>
+                  </li>
+                ))}
+              </ul>
             )}
           </CardContent>
         </Card>
-      </div>
+      ) : canEdit ? (
+        <Builder key={`${q.version}-${q.updatedAt.getTime()}`} quotationId={q.id} lines={builderLines} products={products} orderDiscountBp={q.orderDiscountBp} initialView={initialView} />
+      ) : (
+        <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+          <section className="space-y-2">
+            <DataTable columns={readColumns} rows={q.lines} rowKey={(l) => l.id} empty={<EmptyState title="No lines" />} />
+          </section>
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Totals</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <dl className="grid grid-cols-2 gap-y-1 text-sm">
+                  <dt className="text-muted-foreground">Gross</dt>
+                  <dd className="text-right"><Money paise={q.grossTotal} /></dd>
+                  <dt className="text-muted-foreground">Discount{q.orderDiscountBp ? ` (order ${formatBp(q.orderDiscountBp)})` : ""}</dt>
+                  <dd className="text-right">− <Money paise={q.discountTotal} /></dd>
+                  <dt className="text-muted-foreground">Net</dt>
+                  <dd className="text-right"><Money paise={q.netTotal} /></dd>
+                  <dt className="text-muted-foreground">Tax</dt>
+                  <dd className="text-right"><Money paise={q.taxTotal} /></dd>
+                  <dt className="font-medium">Total</dt>
+                  <dd className="text-right font-semibold"><Money paise={q.total} /></dd>
+                  <dt className="text-muted-foreground">Margin</dt>
+                  <dd className="text-right tabular-nums">{formatBp(q.marginBp)}</dd>
+                </dl>
+              </CardContent>
+            </Card>
+            <RiskCard risk={risk} hasLines={q.lines.length > 0} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

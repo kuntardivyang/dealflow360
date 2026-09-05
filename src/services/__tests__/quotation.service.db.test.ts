@@ -1,7 +1,7 @@
 // Runs against the seeded development database (pnpm reset). Creates its own
 // quotations and deletes them afterwards.
 import { afterAll, describe, expect, it } from "vitest";
-import { ConflictError, ForbiddenError, type SessionUser } from "@/lib/contract";
+import { ConflictError, ForbiddenError, ValidationError, type SessionUser } from "@/lib/contract";
 import { prisma } from "@/lib/db";
 import * as svc from "@/services/quotation.service";
 
@@ -95,5 +95,61 @@ describe("quotation service against the database", () => {
     view = await svc.removeLine({ quotationId: ref.id, version: view.version, lineId: view.totals.lines[0].lineId }, riya);
     expect(view.totals.lines).toHaveLength(0);
     expect(view.totals.marginBp).toBeNull();
+  });
+});
+
+describe("confirm and approval rounds", () => {
+  it("confirms the PDF quote into PENDING_APPROVAL with one Sales Manager step, and a within-limit quote straight to APPROVED", async () => {
+    const riya = await userByEmail("riya@df.local");
+    const acme = await customer("Acme Corp");
+    const laptop = await product('Laptop 14"');
+    const setup = await product("Setup Service");
+
+    const over = await svc.createQuotation({ customerId: acme.id }, riya);
+    created.push(over.id);
+    let v = await svc.addLine({ quotationId: over.id, version: over.version, productId: laptop.id, qty: 10, discountBp: 1200, source: "MANUAL" }, riya);
+    v = await svc.addLine({ quotationId: over.id, version: v.version, productId: setup.id, qty: 2, discountBp: 1800, source: "MANUAL" }, riya);
+    const outcome = await svc.confirmQuotation({ quotationId: over.id, version: v.version }, riya);
+    expect(outcome.status).toBe("PENDING_APPROVAL");
+    expect(outcome.chain).toEqual(["SALES_MANAGER"]);
+    const request = await prisma.approvalRequest.findUniqueOrThrow({ where: { id: outcome.requestId! }, include: { steps: true } });
+    expect(request.version).toBe(1);
+    expect(request.riskScore).toBe(42);
+    expect(request.steps.map((s) => [s.stepNo, s.requiredRole, s.status])).toEqual([[1, "SALES_MANAGER", "PENDING"]]);
+    // confirming twice is an illegal transition
+    await expect(svc.confirmQuotation({ quotationId: over.id, version: outcome.version }, riya)).rejects.toBeInstanceOf(ConflictError);
+    // editing while pending is not allowed either
+    await expect(svc.setOrderDiscount({ quotationId: over.id, version: outcome.version, orderDiscountBp: 100 }, riya)).rejects.toBeInstanceOf(ConflictError);
+
+    const fine = await svc.createQuotation({ customerId: acme.id }, riya);
+    created.push(fine.id);
+    const fv = await svc.addLine({ quotationId: fine.id, version: fine.version, productId: laptop.id, qty: 1, discountBp: 1000, source: "MANUAL" }, riya);
+    const approved = await svc.confirmQuotation({ quotationId: fine.id, version: fv.version }, riya);
+    expect(approved.status).toBe("APPROVED");
+    expect(approved.chain).toEqual([]);
+    expect(approved.requestId).toBeNull();
+
+    // an edit after approval supersedes it: back to DRAFT with a new approval round
+    const edited = await svc.setOrderDiscount({ quotationId: fine.id, version: approved.version, orderDiscountBp: 3000 }, riya);
+    const q = await prisma.quotation.findUniqueOrThrow({ where: { id: fine.id } });
+    expect(q.status).toBe("DRAFT");
+    expect(q.approvalVersion).toBe(2);
+    expect(edited.risk.chain).toEqual(["SALES_MANAGER", "FINANCE"]); // 30 % on a Gold 15 % ceiling
+    const again = await svc.confirmQuotation({ quotationId: fine.id, version: edited.version }, riya);
+    expect(again.status).toBe("PENDING_APPROVAL");
+    const r2 = await prisma.approvalRequest.findUniqueOrThrow({ where: { id: again.requestId! }, include: { steps: true } });
+    expect(r2.version).toBe(2);
+    expect(r2.steps.map((s) => s.requiredRole)).toEqual(["SALES_MANAGER", "FINANCE"]);
+
+    const actions = (await prisma.auditLog.findMany({ where: { quotationId: fine.id }, orderBy: { id: "asc" } })).map((a) => a.action);
+    expect(actions).toEqual(["CREATE", "LINE_ADD", "CONFIRM", "SUPERSEDE_APPROVAL", "ORDER_DISCOUNT", "CONFIRM"]);
+  });
+
+  it("refuses to confirm an empty quotation", async () => {
+    const riya = await userByEmail("riya@df.local");
+    const gamma = await customer("Gamma Retail");
+    const ref = await svc.createQuotation({ customerId: gamma.id }, riya);
+    created.push(ref.id);
+    await expect(svc.confirmQuotation({ quotationId: ref.id, version: ref.version }, riya)).rejects.toBeInstanceOf(ValidationError);
   });
 });
