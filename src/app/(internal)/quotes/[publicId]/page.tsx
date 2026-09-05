@@ -16,6 +16,8 @@ import { formatBp, formatDate, formatDateTime, formatPoints } from "@/lib/format
 import { canTransition } from "@/lib/state";
 import { cn } from "@/lib/utils";
 import { loadRiskWeights, loadRoutingRules } from "@/services/quotation.service";
+import { customerConcessionHistory } from "@/services/concession.service";
+import { judgeProposal } from "@/domain/concession";
 import { suggestFor } from "@/services/upsell.service";
 import { confirmOnBehalfForm, respondToRequestForm, reviseQuotationForm, sendToCustomerForm } from "../../actions/quotation";
 import { Builder, type BuilderLine, type PickerProduct } from "./_components/builder";
@@ -99,6 +101,11 @@ export default async function QuotationDetailPage({
     : [];
 
   const suggestions = canEdit ? await suggestFor(q.id) : [];
+
+  // What this customer has already been given, so the rep sees it while answering a
+  // counter rather than a week later on a report. Only loaded when there is something to
+  // answer; excludes this quotation so the deal is never compared against itself.
+  const concessions = q.customerId && q.portalRequests.length > 0 ? await customerConcessionHistory(q.customerId, q.id) : null;
 
   const audit = tab === "audit" ? await prisma.auditLog.findMany({ where: { quotationId: q.id }, orderBy: { at: "desc" }, take: 100 }) : [];
 
@@ -283,6 +290,15 @@ export default async function QuotationDetailPage({
               Requests the customer raised in the portal. Accepting a counter discount applies it to the line; if the new terms exceed the ceilings the quotation re-enters approval automatically.
               {!canRespond ? " Read-only: only the owning rep can answer, and only while the quotation is under negotiation." : ""}
             </p>
+            {concessions ? (
+              <p className="mb-3 rounded-lg bg-muted/50 px-3 py-2 text-xs ring-1 ring-inset ring-border/70">
+                <span className="font-medium">{q.customer!.name}</span> has averaged{" "}
+                <span className="font-semibold tabular-nums">{formatBp(concessions.meanBp)}</span> across their last{" "}
+                <span className="tabular-nums">{concessions.count}</span> confirmed{" "}
+                {concessions.count === 1 ? "order" : "orders"}, highest{" "}
+                <span className="font-semibold tabular-nums">{formatBp(concessions.maxBp)}</span>.
+              </p>
+            ) : null}
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="col-label border-b border-foreground/10 text-left [&_th]:pr-4 [&_th:last-child]:pr-0">
@@ -307,7 +323,20 @@ export default async function QuotationDetailPage({
                         {r.responseNote ? <p className="text-xs text-muted-foreground">Response: {r.responseNote}</p> : null}
                         <p className="text-xs text-muted-foreground">by {r.contact.name}</p>
                       </td>
-                      <td className="py-2 text-right tabular-nums">{r.proposedDiscountBp !== null ? formatBp(r.proposedDiscountBp) : "–"}</td>
+                      <td className="py-2 text-right tabular-nums">
+                        {r.proposedDiscountBp !== null ? formatBp(r.proposedDiscountBp) : "–"}
+                        {concessions && r.proposedDiscountBp !== null
+                          ? (() => {
+                              const v = judgeProposal(concessions, r.proposedDiscountBp);
+                              if (v.band === "IN_LINE") return null;
+                              return (
+                                <span className={cn("block text-[11px] font-medium", v.band === "HIGHEST_EVER" ? "text-destructive" : "text-warning")}>
+                                  {v.band === "HIGHEST_EVER" ? "their highest ever" : `+${formatPoints(v.overMeanBp)} over their average`}
+                                </span>
+                              );
+                            })()
+                          : null}
+                      </td>
                       <td className="py-2"><StatusBadge status={r.status} /></td>
                       <td className="py-2 whitespace-nowrap text-muted-foreground">{formatDateTime(r.createdAt)}</td>
                       <td className="py-2">
