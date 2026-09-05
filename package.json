@@ -18,6 +18,7 @@
     "db:studio": "prisma studio",
     "reset": "prisma migrate reset --force --skip-generate",
     "smoke": "tsx scripts/smoke.ts",
+    "audit:validation": "tsx scripts/validation-audit.ts",
     "erd": "tsx scripts/erd.ts"
   },
   "dependencies": {
