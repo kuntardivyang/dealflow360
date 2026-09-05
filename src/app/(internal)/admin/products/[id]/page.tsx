@@ -14,6 +14,15 @@ import { getProductEditor } from "@/services/admin.service";
 
 export const metadata = { title: "Product" };
 
+/** Screen 17: Recurring Weekly / Monthly / Yearly (plus quarterly, which the plans support). */
+const INTERVAL_OPTIONS = [
+  { value: "WEEK", label: "Weekly" },
+  { value: "MONTH", label: "Monthly" },
+  { value: "QUARTER", label: "Quarterly" },
+  { value: "YEAR", label: "Yearly" },
+];
+const INTERVAL_LABEL = Object.fromEntries(INTERVAL_OPTIONS.map((o) => [o.value, o.label])) as Record<string, string>;
+
 export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
   const [{ id }] = await Promise.all([params, requireUser(BACKEND_ROLES)]);
   const isNew = id === "new";
@@ -26,9 +35,11 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   const generalFields: FieldDef[] = [
     { name: "name", label: "Product name", type: "text" },
     { name: "sku", label: "SKU", type: "text" },
-    { name: "kind", label: "Subscription?", type: "select", options: [{ value: "GOOD", label: "No, a physical good" }, { value: "SERVICE", label: "No, a service" }, { value: "SUBSCRIPTION", label: "Yes, recurring" }], hint: "Recurring products are billed per plan period; pick the plan on the quotation line." },
+    { name: "kind", label: "Product type", type: "select", options: [{ value: "GOOD", label: "Physical good (stocked in warehouses)" }, { value: "SERVICE", label: "Service" }], hint: "Goods are split across warehouses on confirm; services never ship." },
     { name: "categoryId", label: "Category", type: "select", options: categoryOptions, hint: "Sets the discount ceiling and the minimum upsell margin." },
-    { name: "listPrice", label: "Price", type: "rupees", hint: "Per unit, or per period for a subscription." },
+    { name: "isSubscription", label: "Subscription (tick for a recurring product)", type: "checkbox", hint: "If yes, Recurring becomes visible and the price is per period." },
+    { name: "recurringInterval", label: "Recurring", type: "select", showWhen: "isSubscription", options: INTERVAL_OPTIONS, hint: "Recurring orders with this product are invoiced at the beginning of each period." },
+    { name: "listPrice", label: "Price", type: "rupees", hint: "Per unit; for a subscription, per period." },
     { name: "cost", label: "Cost", type: "rupees", hint: "Drives the live margin indicator and the upsell margin delta." },
     { name: "unit", label: "Unit", type: "text", placeholder: "Each" },
     { name: "taxBp", label: "Tax", type: "percent" },
@@ -64,7 +75,11 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
         <CardContent>
           <EntityForm
             fields={generalFields}
-            initial={product ? { ...product, description: product.description ?? "", variantLabel: product.variantLabel ?? "" } : { kind: "GOOD", unit: "Each", taxBp: 1800, categoryId: categories[0]?.id, extraPrice: 0 }}
+            initial={
+              product
+                ? { ...product, description: product.description ?? "", variantLabel: product.variantLabel ?? "", recurringInterval: product.recurringInterval ?? "MONTH" }
+                : { kind: "GOOD", isSubscription: false, recurringInterval: "MONTH", unit: "Each", taxBp: 1800, categoryId: categories[0]?.id, extraPrice: 0 }
+            }
             hidden={product ? { id: product.id, ...(product.parentId ? {} : { parentId: null, extraPrice: 0 }) } : {}}
             action={saveProduct}
             submitLabel={isNew ? "Create product" : "Save product"}
@@ -117,7 +132,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                 layout="inline"
                 fields={variantFields}
                 initial={{ listPrice: product.listPrice, cost: product.cost, extraPrice: 0 }}
-                hidden={{ parentId: product.id, kind: product.kind, categoryId: product.categoryId, unit: product.unit, taxBp: product.taxBp, name: `${product.name} variant`, isPromoted: false }}
+                hidden={{ parentId: product.id, kind: product.kind, isSubscription: product.isSubscription, recurringInterval: product.recurringInterval, categoryId: product.categoryId, unit: product.unit, taxBp: product.taxBp, name: `${product.name} variant`, isPromoted: false }}
                 action={saveProduct}
                 submitLabel="Add variant"
                 successMessage="Variant created"
@@ -147,22 +162,30 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>{product.kind === "SUBSCRIPTION" ? "Recurring" : "Quantity on hand"}</CardTitle>
+              <CardTitle>{product.isSubscription ? "Recurring" : "Quantity on hand"}</CardTitle>
               <CardDescription>
-                {product.kind === "SUBSCRIPTION"
-                  ? "Recurring orders with this product are invoiced at the beginning of each period. Plans are managed under Subscription plans."
-                  : "Stock per warehouse; edit under Warehouses and stock."}
+                {product.isSubscription
+                  ? "Recurring orders with this product are invoiced at the beginning of each period. Proration and cancellation rules come from the plan."
+                  : product.kind === "GOOD"
+                    ? "Stock per warehouse; edit under Warehouses and stock."
+                    : "A service is not stocked; it is delivered, not shipped."}
               </CardDescription>
             </CardHeader>
             <CardContent className="text-sm">
-              {product.kind === "SUBSCRIPTION" ? (
-                <ul className="list-disc pl-5">
-                  {(product.plans.length ? product.plans : []).map((p) => (
-                    <li key={p.id}>{p.name} ({p.interval.toLowerCase()})</li>
-                  ))}
-                  {product.plans.length === 0 ? <li className="list-none text-muted-foreground">Any plan without a product restriction applies. <Link href="/admin/plans" className="text-primary hover:underline">Manage plans</Link></li> : null}
-                </ul>
-              ) : (
+              {product.isSubscription ? (
+                <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
+                  <dt className="text-muted-foreground">Recurring</dt>
+                  <dd>{product.recurringInterval ? INTERVAL_LABEL[product.recurringInterval] : "–"}</dd>
+                  <dt className="text-muted-foreground">Price</dt>
+                  <dd><Money paise={product.listPrice} /> per {product.unit.toLowerCase()} per period</dd>
+                  <dt className="text-muted-foreground">Plan</dt>
+                  <dd>
+                    {product.plans.length ? product.plans.map((p) => `${p.name} (${p.interval.toLowerCase()})`).join(", ") : `Shared ${product.recurringInterval ? INTERVAL_LABEL[product.recurringInterval] : ""} plan`}
+                    {" · "}
+                    <Link href="/admin/plans" className="text-primary hover:underline">Manage plans</Link>
+                  </dd>
+                </dl>
+              ) : product.kind === "GOOD" ? (
                 <ul className="space-y-1">
                   {warehouses.map((w) => {
                     const s = product.stockLevels.find((l) => l.warehouseId === w.id);
@@ -175,6 +198,8 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                   })}
                   <li className="pt-2"><Link href="/admin/warehouses" className="text-primary hover:underline">Edit stock levels</Link></li>
                 </ul>
+              ) : (
+                <p className="text-muted-foreground">No stock is tracked for a service.</p>
               )}
               <p className="mt-3 text-xs text-muted-foreground">Ceiling for this category: {product.category.discountCeilingBp === null ? "tier ceiling" : formatBp(product.category.discountCeilingBp)}.</p>
             </CardContent>

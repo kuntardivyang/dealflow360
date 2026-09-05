@@ -25,6 +25,7 @@ import { RiskCard, chainLabel } from "./_components/risk-card";
 export const dynamic = "force-dynamic";
 
 const ROLE_LABEL: Record<string, string> = { SALES_MANAGER: "Sales Manager", FINANCE: "Finance" };
+const RECURRING_LABEL: Record<string, string> = { WEEK: "billed weekly", MONTH: "billed monthly", QUARTER: "billed quarterly", YEAR: "billed yearly" };
 const REQUEST_TYPE_LABEL: Record<string, string> = { COMMENT: "Comment", CHANGE_REQUEST: "Change request", COUNTER_DISCOUNT: "Counter discount" };
 
 export default async function QuotationDetailPage({
@@ -93,6 +94,7 @@ export default async function QuotationDetailPage({
         listPrice: p.listPrice,
         unit: p.unit,
         isPromoted: p.isPromoted,
+        recurring: p.isSubscription ? RECURRING_LABEL[p.recurringInterval ?? "MONTH"] : null,
       }))
     : [];
 

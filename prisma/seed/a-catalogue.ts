@@ -45,10 +45,10 @@ export async function seedCatalogue(db: PrismaClient, tiers: Tiers) {
     data: { sku: "SV-TRAIN", name: "Training Day", kind: "SERVICE", categoryId: services.id, listPrice: rs(15_000), cost: rs(11_000), unit: "Day" },
   });
   const supportBasic = await db.product.create({
-    data: { sku: "SB-SUP-BASIC", name: "Support Basic", kind: "SUBSCRIPTION", categoryId: subscriptions.id, listPrice: rs(500), cost: rs(200), unit: "Seat / month" },
+    data: { sku: "SB-SUP-BASIC", name: "Support Basic", kind: "SERVICE", isSubscription: true, recurringInterval: "MONTH", categoryId: subscriptions.id, listPrice: rs(500), cost: rs(200), unit: "Seat" },
   });
   const supportPro = await db.product.create({
-    data: { sku: "SB-SUP-PRO", name: "Support Pro", kind: "SUBSCRIPTION", categoryId: subscriptions.id, listPrice: rs(1_000), cost: rs(400), unit: "Seat / month", isPromoted: true },
+    data: { sku: "SB-SUP-PRO", name: "Support Pro", kind: "SERVICE", isSubscription: true, recurringInterval: "MONTH", categoryId: subscriptions.id, listPrice: rs(1_000), cost: rs(400), unit: "Seat", isPromoted: true },
   });
 
   // Tier price rules target Training Day only, so the demo numbers stay on list prices.

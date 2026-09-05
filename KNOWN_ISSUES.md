@@ -4,7 +4,7 @@ Kept current after every reviewer visit. What is stubbed, partial or fragile, wi
 
 ## Partial or not built (from the plan's cut list)
 
-- **Subscription quantity change and cancellation with proration** (features 80, 81, 83): the plan rules (day-based proration, bill change day, cancellation policy, refund method) are configured and stored, the billing schedule is materialised on confirm, but the mid-cycle change screen and the credit note are not built yet. Next: `services/subscription.service.ts` with `prorate()` against the real period.
+- **Subscription products are a switch, not a kind** (reviewer note, mockup screen 17): a product is a good or a service, and the Subscription checkbox on its form reveals Recurring (weekly / monthly / quarterly / yearly) with the price then per period. Ticking it is enough: the line becomes recurring on the product's interval, using the plan limited to that product or the shared plan for the interval (created on first use when none exists). Proration and cancellation rules still live on the plan under Admin > Plans; the per-period price is the product's list price, so a product cannot carry different prices per interval (Odoo's time-based pricing table). Next: per-interval prices on the product.
 - **Backorder consolidation prompt** (feature 91): backorder lines are visible on the fulfillment detail; the "Consolidate Remaining Backorder" prompt on stock receipt is not built.
 - **Manual override matrix** (feature 92): Accept Suggested Split works; the editable per-warehouse override is a form only if A finished it, otherwise "next".
 - **Magic-link portal login** (feature 73): the portal uses email + password (seeded `acme@test.com` / `demo1234`). The token table exists; the link flow is not built.
