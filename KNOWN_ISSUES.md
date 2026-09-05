@@ -7,7 +7,7 @@ Kept current after every reviewer visit. What is stubbed, partial or fragile, wi
 - **Subscription quantity change and cancellation with proration** (features 80, 81, 83): the plan rules (day-based proration, bill change day, cancellation policy, refund method) are configured and stored, the billing schedule is materialised on confirm, but the mid-cycle change screen and the credit note are not built yet. Next: `services/subscription.service.ts` with `prorate()` against the real period.
 - **Backorder consolidation prompt** (feature 91): backorder lines are visible on the fulfillment detail; the "Consolidate Remaining Backorder" prompt on stock receipt is not built.
 - **Manual override matrix** (feature 92): Accept Suggested Split works; the editable per-warehouse override is a form only if A finished it, otherwise "next".
-- **Magic-link portal login** (feature 73): the portal uses email + password (seeded `buyer@acme.com` / `demo1234`). The token table exists; the link flow is not built.
+- **Magic-link portal login** (feature 73): the portal uses email + password (seeded `acme@test.com` / `demo1234`). The token table exists; the link flow is not built.
 - **Pipeline (Kanban) view** (feature 84): the nav item points to the quotation list grouped by status; there is no drag and drop.
 - **Multi-currency and multi-company** (PDF bonus): not started. Money is INR paise everywhere; `currency` columns hold the constant `INR`.
 - **PDF export** is the browser print dialog on a print stylesheet (navigation and filters hidden), not a PDF library. XLS export is real (SheetJS).

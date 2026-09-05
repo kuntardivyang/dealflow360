@@ -15,7 +15,7 @@ export function PortalLoginForm({ next }: { next?: string }) {
       {next ? <input type="hidden" name="next" value={next} /> : null}
       <div className="space-y-1.5">
         <Label htmlFor="portal-email">Email</Label>
-        <Input id="portal-email" name="email" type="email" autoComplete="email" required placeholder="buyer@company.com" aria-invalid={!!errors.email} />
+        <Input id="portal-email" name="email" type="email" autoComplete="email" required placeholder="acme@test.com" aria-invalid={!!errors.email} />
         {errors.email ? <p role="alert" className="text-xs text-destructive">{errors.email[0]}</p> : null}
       </div>
       <div className="space-y-1.5">

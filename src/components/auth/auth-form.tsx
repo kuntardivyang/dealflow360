@@ -82,7 +82,7 @@ export function AuthForm({
             autoComplete="email"
             required
             aria-invalid={!!errors.email}
-            placeholder="you@company.com"
+            placeholder="riya@test.com"
             defaultValue={mode === "login" ? "" : undefined}
           />
         </Field>

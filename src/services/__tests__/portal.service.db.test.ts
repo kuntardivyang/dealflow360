@@ -11,7 +11,7 @@ let acmeBuyer: PortalUser;
 let betaBuyer: PortalUser;
 
 async function riya(): Promise<SessionUser> {
-  const u = await prisma.user.findUniqueOrThrow({ where: { email: "riya@df.local" } });
+  const u = await prisma.user.findUniqueOrThrow({ where: { email: "riya@test.com" } });
   return { id: u.id, name: u.name, email: u.email, role: u.role, managerId: u.managerId };
 }
 
@@ -53,10 +53,10 @@ afterAll(async () => {
 
 describe("portal service against the database", () => {
   it("logs a contact in and scopes every read to their own customer", async () => {
-    acmeBuyer = (await authenticatePortal("buyer@acme.com", "demo1234"))!;
-    betaBuyer = (await authenticatePortal("buyer@beta.com", "demo1234"))!;
+    acmeBuyer = (await authenticatePortal("acme@test.com", "demo1234"))!;
+    betaBuyer = (await authenticatePortal("beta@test.com", "demo1234"))!;
     expect(acmeBuyer).toMatchObject({ customerName: "Acme Corp" });
-    expect(await authenticatePortal("buyer@acme.com", "nope")).toBeNull();
+    expect(await authenticatePortal("acme@test.com", "nope")).toBeNull();
 
     const q = await sentQuote();
     const dto = await getPortalQuotation(q.publicId, acmeBuyer);

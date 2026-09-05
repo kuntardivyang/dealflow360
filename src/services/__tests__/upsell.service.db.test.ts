@@ -18,7 +18,7 @@ afterAll(async () => {
 
 describe("upsell suggestions", () => {
   it("ranks the docking station first for a laptop cart, shows the margin delta, excludes cart items", async () => {
-    const riya = await userByEmail("riya@df.local");
+    const riya = await userByEmail("riya@test.com");
     const acme = await prisma.customer.findFirstOrThrow({ where: { name: "Acme Corp" } });
     const laptop = await product('Laptop 14"');
     const ref = await svc.createQuotation({ customerId: acme.id }, riya);
@@ -35,7 +35,7 @@ describe("upsell suggestions", () => {
   });
 
   it("puts the promoted Support Pro first for a Support Basic cart, and shows only promoted products for an empty cart", async () => {
-    const riya = await userByEmail("riya@df.local");
+    const riya = await userByEmail("riya@test.com");
     const beta = await prisma.customer.findFirstOrThrow({ where: { name: "Beta Industries" } });
     const basic = await product("Support Basic");
     const ref = await svc.createQuotation({ customerId: beta.id }, riya);

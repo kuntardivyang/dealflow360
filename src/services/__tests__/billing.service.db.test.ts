@@ -26,9 +26,9 @@ afterAll(async () => {
 
 describe("billing on confirmation and payments", () => {
   it("bills a laptop and a monthly Support Pro separately, then pays partially, fully, and refuses overpayment", async () => {
-    const riya = await userByEmail("riya@df.local");
-    const admin = await userByEmail("admin@df.local");
-    const farhan = await userByEmail("farhan@df.local");
+    const riya = await userByEmail("riya@test.com");
+    const admin = await userByEmail("admin@test.com");
+    const farhan = await userByEmail("farhan@test.com");
     const beta = await prisma.customer.findFirstOrThrow({ where: { name: "Beta Industries" } });
     const laptop = await prisma.product.findFirstOrThrow({ where: { name: 'Laptop 14"' } });
     const supportPro = await prisma.product.findFirstOrThrow({ where: { name: "Support Pro" } });

@@ -21,9 +21,9 @@ export async function seedCustomers(db: PrismaClient, tiers: Tiers) {
       include: { contacts: true },
     });
 
-  const acme = await make("Acme Corp", "Ahmedabad", tiers.gold.id, "buyer@acme.com", "Nisha Acme");
-  const beta = await make("Beta Industries", "Kolkata", tiers.silver.id, "buyer@beta.com", "Rahul Beta");
-  const gamma = await make("Gamma Retail", "Pune", tiers.bronze.id, "buyer@gamma.com", "Sana Gamma");
+  const acme = await make("Acme Corp", "Ahmedabad", tiers.gold.id, "acme@test.com", "Nisha Acme");
+  const beta = await make("Beta Industries", "Kolkata", tiers.silver.id, "beta@test.com", "Rahul Beta");
+  const gamma = await make("Gamma Retail", "Pune", tiers.bronze.id, "gamma@test.com", "Sana Gamma");
   log("customers", "Acme (Gold), Beta (Silver), Gamma (Bronze) with portal contacts");
   return { acme, beta, gamma };
 }
