@@ -29,7 +29,7 @@ import { publicId } from "@/lib/ids";
 import { scoreLines } from "@/domain/risk";
 import { riskPreview } from "@/domain/route";
 import { audit } from "@/lib/audit";
-import { EDIT_SUPERSEDES_APPROVAL, assertTransition } from "@/lib/state";
+import { EDIT_SUPERSEDES_APPROVAL, assertActor, assertTransition } from "@/lib/state";
 import { assertOwnerOrAdmin, lockQuotation, nextNumber } from "./support";
 
 const toRef = (q: { id: number; publicId: string; number: string; status: QuotationStatus; version: number }): QuotationRef => ({
@@ -42,6 +42,7 @@ const toRef = (q: { id: number; publicId: string; number: string; status: Quotat
 
 export async function createQuotation(input: CreateQuotationInput, user: SessionUser): Promise<QuotationRef> {
   return prisma.$transaction(async (tx) => {
+    assertActor(actorFromUser(user), "EDIT_LINES"); // reps and admins build quotations
     const customer = await tx.customer.findFirst({ where: { id: input.customerId, archivedAt: null } });
     if (!customer) throw new NotFoundError("Customer not found");
     const number = await nextNumber(tx, "quotation", "Q");
@@ -75,6 +76,7 @@ export async function addLine(input: AddLineInput, user: SessionUser): Promise<Q
       include: { category: true, plans: { where: { archivedAt: null }, orderBy: { id: "asc" } } },
     });
     if (!product) throw new NotFoundError("Product not found");
+    if (!Number.isInteger(input.qty) || input.qty < 1) throw new ValidationError("Quantity must be a whole number of at least 1", { qty: ["At least 1"] });
 
     const isSubscription = product.kind === "SUBSCRIPTION";
     let planId: number | null = null;
@@ -145,6 +147,7 @@ export async function updateLine(input: UpdateLineInput, user: SessionUser): Pro
     const q = await loadForEdit(tx, input.quotationId, input.version, user);
     const line = await tx.quotationLine.findFirst({ where: { id: input.lineId, quotationId: q.id } });
     if (!line) throw new NotFoundError("Line not found");
+    if (input.qty !== undefined && (!Number.isInteger(input.qty) || input.qty < 1)) throw new ValidationError("Quantity must be a whole number of at least 1", { qty: ["At least 1"] });
     const data = {
       ...(input.qty !== undefined ? { qty: input.qty } : {}),
       ...(input.discountBp !== undefined ? { discountBp: input.discountBp } : {}),
@@ -209,6 +212,7 @@ export async function confirmQuotation(input: ConfirmQuotationInput, user: Sessi
     const q = await tx.quotation.findUnique({ where: { id: input.quotationId }, include: { lines: { select: { id: true } } } });
     if (!q) throw new NotFoundError("Quotation not found");
     assertOwnerOrAdmin(q, user);
+    assertActor(actorFromUser(user), "CONFIRM");
     assertTransition(q.status, "CONFIRM");
     if (q.lines.length === 0) throw new ValidationError("Add at least one line before confirming");
     await lockQuotation(tx, q.id, input.version);
@@ -263,6 +267,7 @@ export async function reviseQuotation(input: ReviseQuotationInput, user: Session
     const q = await tx.quotation.findUnique({ where: { id: input.quotationId } });
     if (!q) throw new NotFoundError("Quotation not found");
     assertOwnerOrAdmin(q, user);
+    assertActor(actorFromUser(user), "REVISE");
     assertTransition(q.status, "REVISE");
     await lockQuotation(tx, q.id, input.version);
     const draft = await tx.quotation.update({ where: { id: q.id }, data: { status: "DRAFT", approvalVersion: { increment: 1 } } });
@@ -324,6 +329,7 @@ async function loadForEdit(tx: Tx, id: number, version: number, user: SessionUse
   const q = await tx.quotation.findUnique({ where: { id }, include: { customer: { include: { tier: true } } } });
   if (!q) throw new NotFoundError("Quotation not found");
   assertOwnerOrAdmin(q, user);
+  assertActor(actorFromUser(user), "EDIT_LINES");
   assertTransition(q.status, "EDIT_LINES");
   await lockQuotation(tx, id, version);
   if (!EDIT_SUPERSEDES_APPROVAL.includes(q.status)) return q;

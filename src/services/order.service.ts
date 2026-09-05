@@ -22,6 +22,7 @@ export async function sendToCustomer(input: SendToCustomerInput, user: SessionUs
     const q = await tx.quotation.findUnique({ where: { id: input.quotationId } });
     if (!q) throw new NotFoundError("Quotation not found");
     assertOwnerOrAdmin(q, user);
+    assertActor(actorFromUser(user), "SEND");
     assertTransition(q.status, "SEND");
     await lockQuotation(tx, q.id, input.version);
     const sent = await tx.quotation.update({ where: { id: q.id }, data: { status: "SENT", sentAt: new Date() } });
