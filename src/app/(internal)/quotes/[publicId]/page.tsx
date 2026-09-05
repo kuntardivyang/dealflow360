@@ -16,7 +16,7 @@ import { formatBp, formatDateTime, formatPoints } from "@/lib/format";
 import { canTransition } from "@/lib/state";
 import { cn } from "@/lib/utils";
 import { loadRiskWeights, loadRoutingRules } from "@/services/quotation.service";
-import { reviseQuotationForm } from "../../actions/quotation";
+import { confirmOnBehalfForm, reviseQuotationForm, sendToCustomerForm } from "../../actions/quotation";
 import { Builder, type BuilderLine, type PickerProduct } from "./_components/builder";
 import { RiskCard, chainLabel } from "./_components/risk-card";
 
@@ -204,8 +204,51 @@ export default async function QuotationDetailPage({
       ) : null}
       {q.status === "APPROVED" ? (
         <Card className="border-success/40 bg-success/5">
-          <CardContent className="p-4 text-sm">
-            <span className="font-medium">Approved.</span> Routing needed {request ? chainLabel(request.chain as string[]) : "no approval"}. Sending to the customer arrives with the next merge.
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4 text-sm">
+            <span>
+              <span className="font-medium">Approved.</span> Routing needed {request ? chainLabel(request.chain as string[]) : "no approval"}. Send it to the customer to negotiate and confirm in the portal.
+            </span>
+            {q.repUserId === user.id || user.role === "ADMIN" ? (
+              <form action={sendToCustomerForm}>
+                <input type="hidden" name="quotationId" value={q.id} />
+                <input type="hidden" name="version" value={q.version} />
+                <input type="hidden" name="publicId" value={q.publicId} />
+                <Button type="submit">Send to customer</Button>
+              </form>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+      {q.status === "SENT" || q.status === "UNDER_NEGOTIATION" ? (
+        <Card className="border-info/40 bg-info/5">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4 text-sm">
+            <span>
+              <span className="font-medium">{q.status === "SENT" ? "Sent to the customer." : "Under negotiation."}</span> Portal link:{" "}
+              <code className="rounded bg-muted px-1.5 py-0.5 text-xs">/portal/q/{q.publicId}</code> (customer logs in with their portal account).
+            </span>
+            {user.role === "ADMIN" ? (
+              <form action={confirmOnBehalfForm} className="flex items-center gap-2">
+                <input type="hidden" name="quotationId" value={q.id} />
+                <input type="hidden" name="version" value={q.version} />
+                <input type="hidden" name="publicId" value={q.publicId} />
+                <input type="hidden" name="customerName" value={q.customer.name} />
+                <Button type="submit" variant="outline" title="Admin only: confirm the order on the customer's behalf">
+                  Confirm on behalf
+                </Button>
+              </form>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+      {q.status === "CONFIRMED" || q.status === "FULFILLMENT" || q.status === "PAID" ? (
+        <Card className="border-success/40 bg-success/5">
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4 text-sm">
+            <span>
+              <span className="font-medium">Order confirmed{q.confirmedName ? ` by ${q.confirmedName}` : ""}.</span> Warehouse split and billing follow from here.
+            </span>
+            <Link href={`/fulfillment/${q.publicId}`} className="text-sm font-medium underline-offset-4 hover:underline">
+              Open fulfillment →
+            </Link>
           </CardContent>
         </Card>
       ) : null}

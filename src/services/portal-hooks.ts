@@ -1,13 +1,12 @@
-// Owner: B. What happens the moment a customer confirms. A owns the two services this
-// calls; until they are merged (22:00) these are no-ops so the portal flow is clickable.
-// TODO(contract): replace the bodies with billing.onConfirmed(tx, quotationId, actor)
-// and fulfillment.propose(tx, quotationId) from A's services, then delete this note.
+// What happens the moment an order is confirmed, from the portal or by an admin on the
+// customer's behalf. Runs inside the confirming transaction, so a failure here rolls the
+// confirmation back. Fulfillment proposes the warehouse split; billing (invoices,
+// subscriptions, schedule) is attached next.
 import type { Actor } from "@/lib/contract";
 import type { Tx } from "@/lib/db";
+import { proposePlan } from "./fulfillment.service";
 
 export async function onConfirmedHooks(tx: Tx, quotationId: number, actor: Actor): Promise<{ invoicesCreated: number; planProposed: boolean }> {
-  void tx;
-  void quotationId;
-  void actor;
-  return { invoicesCreated: 0, planProposed: false };
+  const planId = await proposePlan(tx, quotationId, actor);
+  return { invoicesCreated: 0, planProposed: planId !== null };
 }
