@@ -4,6 +4,7 @@
 // so no quotation data is ever streamed to a browser that is not logged in.
 import { NextResponse, type NextRequest } from "next/server";
 import { PORTAL_COOKIE, SESSION_COOKIE } from "@/lib/auth/constants";
+import { BACKEND_ROLES } from "@/lib/contract";
 import { prisma } from "@/lib/db";
 
 const PORTAL_OPEN = ["/portal/login", "/portal/auth"];
@@ -15,8 +16,21 @@ export async function middleware(req: NextRequest) {
 
   const cookieName = portal ? PORTAL_COOKIE : SESSION_COOKIE;
   const token = req.cookies.get(cookieName)?.value;
-  const valid = token ? (portal ? await portalSessionValid(token) : await sessionValid(token)) : false;
-  if (valid) return NextResponse.next();
+  if (portal) {
+    if (token && (await portalSessionValid(token))) return NextResponse.next();
+  } else if (token) {
+    const role = await sessionRole(token);
+    if (role) {
+      // The back-end configuration area is for Admin, Sales Manager and Finance only.
+      if (pathname.startsWith("/admin") && !BACKEND_ROLES.includes(role)) {
+        const home = req.nextUrl.clone();
+        home.pathname = "/dashboard";
+        home.search = "?forbidden=admin";
+        return NextResponse.redirect(home);
+      }
+      return NextResponse.next();
+    }
+  }
 
   const url = req.nextUrl.clone();
   const next = `${pathname}${search}`;
@@ -28,9 +42,10 @@ export async function middleware(req: NextRequest) {
   return res;
 }
 
-async function sessionValid(token: string): Promise<boolean> {
-  const s = await prisma.session.findUnique({ where: { token }, select: { expiresAt: true, user: { select: { isActive: true } } } });
-  return !!s && s.expiresAt > new Date() && s.user.isActive;
+/** The user's role for a live session, or null when the session is missing, expired or the user is inactive. */
+async function sessionRole(token: string) {
+  const s = await prisma.session.findUnique({ where: { token }, select: { expiresAt: true, user: { select: { isActive: true, role: true } } } });
+  return s && s.expiresAt > new Date() && s.user.isActive ? s.user.role : null;
 }
 
 async function portalSessionValid(token: string): Promise<boolean> {

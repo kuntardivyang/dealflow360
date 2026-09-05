@@ -69,12 +69,13 @@ function assertRole(user: SessionUser, roles?: readonly Role[]): void {
 
 /**
  * Guard for pages and layouts: redirects to /login?next=... when there is no valid
- * session. Pass `roles` to limit an area (403 page via ForbiddenError otherwise).
+ * session, and to the dashboard when the role may not see the area. The middleware
+ * enforces both earlier; this is the belt to its braces.
  */
 export async function requireUser(roles?: readonly Role[], nextPath?: string): Promise<SessionUser> {
   const user = await getSessionUser();
   if (!user) redirect(nextPath ? `/login?next=${encodeURIComponent(nextPath)}` : "/login");
-  assertRole(user, roles);
+  if (roles && roles.length > 0 && !roles.includes(user.role)) redirect("/dashboard?forbidden=1");
   return user;
 }
 
