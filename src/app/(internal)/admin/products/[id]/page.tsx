@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Money, PageHeader, StatusBadge } from "@/components/shared";
 import { EntityForm, type FieldDef } from "@/components/admin/entity-form";
-import { savePricelistRule, saveProduct } from "@/app/(internal)/actions/admin";
+import { savePricelistRule, saveProduct, saveProductPlanPrice } from "@/app/(internal)/actions/admin";
 import { requireUser } from "@/lib/auth/internal";
 import { BACKEND_ROLES } from "@/lib/contract";
 import { formatBp } from "@/lib/format";
@@ -28,7 +28,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   const isNew = id === "new";
   const numericId = isNew ? null : Number(id);
   if (!isNew && !Number.isInteger(numericId)) notFound();
-  const { product, categories, tiers, parents, warehouses } = await getProductEditor(numericId);
+  const { product, categories, tiers, parents, warehouses, recurringPlans } = await getProductEditor(numericId);
   if (!isNew && !product) notFound();
 
   const categoryOptions = categories.map((c) => ({ value: String(c.id), label: c.name }));
@@ -53,6 +53,10 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
     { name: "extraPrice", label: "Extra price", type: "rupees", width: "w-32" },
     { name: "listPrice", label: "Price", type: "rupees", width: "w-32" },
     { name: "cost", label: "Cost", type: "rupees", width: "w-32" },
+  ];
+  const planPriceFields: FieldDef[] = [
+    { name: "planId", label: "Recurring plan", type: "select", width: "w-40", options: recurringPlans.map((p) => ({ value: String(p.id), label: p.name })) },
+    { name: "price", label: "Price per period", type: "rupees", width: "w-40" },
   ];
   const ruleFields: FieldDef[] = [
     { name: "tierId", label: "Tier", type: "select", width: "w-36", options: tiers.map((t) => ({ value: String(t.id), label: t.name })) },
@@ -139,6 +143,53 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                 resetOnSuccess
               />
               <p className="mt-1 text-xs text-muted-foreground">The variant is named after the parent plus its value; open it to rename.</p>
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {product && product.isSubscription ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Recurring prices</CardTitle>
+            <CardDescription>
+              One price per recurring plan, so this single product is sold monthly, quarterly or yearly without duplicating the SKU. A plan with no row here falls back to the list price above.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {product.planPrices.length ? (
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-b-foreground/10 bg-muted/50 hover:bg-muted/50">
+                    <TableHead className="col-label h-9">Plan</TableHead>
+                    <TableHead className="col-label h-9">Cycle</TableHead>
+                    <TableHead className="col-label h-9 text-right">Price per period</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {product.planPrices.map((pp) => (
+                    <TableRow key={pp.id}>
+                      <TableCell className="font-medium">{pp.plan.name}</TableCell>
+                      <TableCell>{INTERVAL_LABEL[pp.plan.interval] ?? pp.plan.interval}</TableCell>
+                      <TableCell className="text-right"><Money paise={pp.price} /></TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <p className="text-sm text-muted-foreground">No plan prices yet: every plan uses the list price above.</p>
+            )}
+            <div className="border-t pt-3">
+              <EntityForm
+                layout="inline"
+                fields={planPriceFields}
+                initial={{ planId: recurringPlans[0]?.id, price: product.listPrice }}
+                hidden={{ productId: product.id }}
+                action={saveProductPlanPrice}
+                submitLabel="Set plan price"
+                successMessage="Plan price saved"
+              />
+              <p className="mt-1 text-xs text-muted-foreground">Setting a price for a plan that already has one overwrites it.</p>
             </div>
           </CardContent>
         </Card>
