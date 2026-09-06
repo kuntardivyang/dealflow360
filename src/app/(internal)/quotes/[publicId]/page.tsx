@@ -104,10 +104,10 @@ export default async function QuotationDetailPage({
 
   const suggestions = canEdit ? await suggestFor(q.id) : [];
 
-  // What this customer has already been given, so the rep sees it while answering a
-  // counter rather than a week later on a report. Only loaded when there is something to
-  // answer; excludes this quotation so the deal is never compared against itself.
-  const concessions = q.customerId && q.portalRequests.length > 0 ? await customerConcessionHistory(q.customerId, q.id) : null;
+  // What this customer has already been given, so the rep sees it while pricing the deal
+  // and again while answering a counter. Excludes this quotation, so it is never compared
+  // against itself, and returns null below two closed orders.
+  const concessions = q.customerId ? await customerConcessionHistory(q.customerId, q.id) : null;
 
   const audit = tab === "audit" ? await prisma.auditLog.findMany({ where: { quotationId: q.id }, orderBy: { at: "desc" }, take: 100 }) : [];
 
@@ -209,6 +209,15 @@ export default async function QuotationDetailPage({
         customers={customers.map((c) => ({ id: c.id, name: c.name, city: c.city, tier: c.tier.name, ceilingBp: c.tier.discountCeilingBp }))}
       />
 
+      {concessions ? (
+        <p className="rounded-lg bg-muted/50 px-3 py-2 text-xs ring-1 ring-inset ring-border/70">
+          <span className="font-medium">{q.customer!.name}</span> has averaged{" "}
+          <span className="font-semibold tabular-nums">{formatBp(concessions.meanBp)}</span> across their last{" "}
+          <span className="tabular-nums">{concessions.count}</span> confirmed {concessions.count === 1 ? "order" : "orders"}, highest{" "}
+          <span className="font-semibold tabular-nums">{formatBp(concessions.maxBp)}</span>.
+        </p>
+      ) : null}
+
       {request && q.status === "PENDING_APPROVAL" ? (
         <Card className="border-l-4 border-l-warning bg-warning/5">
           <CardContent className="flex flex-wrap items-center gap-4 p-4 text-sm">
@@ -292,15 +301,6 @@ export default async function QuotationDetailPage({
               Requests the customer raised in the portal. Accepting a counter discount applies it to the line; if the new terms exceed the ceilings the quotation re-enters approval automatically.
               {!canRespond ? " Read-only: only the owning rep can answer, and only while the quotation is under negotiation." : ""}
             </p>
-            {concessions ? (
-              <p className="mb-3 rounded-lg bg-muted/50 px-3 py-2 text-xs ring-1 ring-inset ring-border/70">
-                <span className="font-medium">{q.customer!.name}</span> has averaged{" "}
-                <span className="font-semibold tabular-nums">{formatBp(concessions.meanBp)}</span> across their last{" "}
-                <span className="tabular-nums">{concessions.count}</span> confirmed{" "}
-                {concessions.count === 1 ? "order" : "orders"}, highest{" "}
-                <span className="font-semibold tabular-nums">{formatBp(concessions.maxBp)}</span>.
-              </p>
-            ) : null}
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="col-label border-b border-foreground/10 text-left [&_th]:pr-4 [&_th:last-child]:pr-0">

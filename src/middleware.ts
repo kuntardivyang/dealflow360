@@ -7,7 +7,9 @@ import { PORTAL_COOKIE, SESSION_COOKIE } from "@/lib/auth/constants";
 import { BACKEND_ROLES } from "@/lib/contract";
 import { prisma } from "@/lib/db";
 
-const PORTAL_OPEN = ["/portal/login", "/portal/auth"];
+// Only the login page is reachable without a portal session. Add a path here only when a
+// page really must be public: anything listed is served before any session check runs.
+const PORTAL_OPEN = ["/portal/login"];
 
 export async function middleware(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
