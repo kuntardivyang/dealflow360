@@ -11,6 +11,7 @@ import {
   type CategoryInput,
   type PlanInput,
   type PricelistRuleInput,
+  type ProductPlanPriceInput,
   type ProductInput,
   type RiskConfigInput,
   type SessionUser,
@@ -211,6 +212,19 @@ export function savePricelistRule(input: PricelistRuleInput, user: SessionUser) 
   );
 }
 
+export function saveProductPlanPrice(input: ProductPlanPriceInput, user: SessionUser) {
+  const data = { productId: input.productId, planId: input.planId, price: input.price };
+  return saveRow(
+    "ProductPlanPrice",
+    user,
+    input.id,
+    (tx, id) => tx.productPlanPrice.findUnique({ where: { id } }),
+    (tx) => tx.productPlanPrice.upsert({ where: { productId_planId: { productId: data.productId, planId: data.planId } }, create: data, update: { price: data.price } }),
+    (tx, id) => tx.productPlanPrice.update({ where: { id }, data }),
+    (r) => ({ productId: r.productId, planId: r.planId, price: r.price }),
+  );
+}
+
 /** Admin only (checked by the action). Role is read from this row on every request, so it applies at once. */
 export async function setUserRole(input: UserRoleInput, user: SessionUser) {
   return prisma.$transaction(async (tx) => {
@@ -291,7 +305,7 @@ export async function getProducts() {
 }
 
 export async function getProductEditor(id: number | null) {
-  const [product, categories, tiers, parents, warehouses] = await Promise.all([
+  const [product, categories, tiers, parents, warehouses, recurringPlans] = await Promise.all([
     id === null
       ? null
       : prisma.product.findUnique({
@@ -303,14 +317,16 @@ export async function getProductEditor(id: number | null) {
             pricelistRules: { orderBy: { id: "asc" }, include: { tier: { select: { name: true } } } },
             stockLevels: { include: { warehouse: { select: { name: true } } } },
             plans: { where: { archivedAt: null }, select: { id: true, name: true, interval: true } },
+            planPrices: { orderBy: { planId: "asc" }, include: { plan: { select: { id: true, name: true, interval: true } } } },
           },
         }),
     prisma.productCategory.findMany({ orderBy: { sortOrder: "asc" } }),
     prisma.customerTier.findMany({ orderBy: { sortOrder: "asc" } }),
     prisma.product.findMany({ where: { parentId: null, archivedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
     prisma.warehouse.findMany({ where: { archivedAt: null }, orderBy: { priority: "asc" }, select: { id: true, name: true } }),
+    prisma.recurringPlan.findMany({ where: { archivedAt: null }, orderBy: { id: "asc" }, select: { id: true, name: true, interval: true } }),
   ]);
-  return { product, categories, tiers, parents, warehouses };
+  return { product, categories, tiers, parents, warehouses, recurringPlans };
 }
 
 export async function getUsers() {

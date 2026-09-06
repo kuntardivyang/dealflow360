@@ -89,7 +89,7 @@ export default async function QuotationDetailPage({
   }));
 
   const products: PickerProduct[] = canEdit
-    ? (await prisma.product.findMany({ where: { archivedAt: null }, include: { category: true }, orderBy: [{ category: { sortOrder: "asc" } }, { name: "asc" }] })).map((p) => ({
+    ? (await prisma.product.findMany({ where: { archivedAt: null }, include: { category: true, planPrices: { include: { plan: { select: { id: true, name: true } } }, orderBy: { planId: "asc" } } }, orderBy: [{ category: { sortOrder: "asc" } }, { name: "asc" }] })).map((p) => ({
         id: p.id,
         name: p.name,
         category: p.category.name,
@@ -98,6 +98,7 @@ export default async function QuotationDetailPage({
         unit: p.unit,
         isPromoted: p.isPromoted,
         recurring: p.isSubscription ? RECURRING_LABEL[p.recurringInterval ?? "MONTH"] : null,
+        planPrices: p.isSubscription ? p.planPrices.map((pp) => ({ planId: pp.planId, planName: pp.plan.name, price: pp.price })) : [],
       }))
     : [];
 

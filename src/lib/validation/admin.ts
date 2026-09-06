@@ -103,6 +103,9 @@ export const pricelistRuleSchema = z.object({
   note: z.string().trim().max(200).nullish(),
 });
 
+/** One price per (product, recurring plan): Odoo's time-based pricing table. */
+export const productPlanPriceSchema = z.object({ id: zId.optional(), productId: zId, planId: zId, price: zMoney });
+
 export const userRoleSchema = z.object({ userId: zId, role: roleSchema, managerId: zId.nullable().default(null) });
 
 export type TierInput = z.infer<typeof tierSchema>;
@@ -114,4 +117,5 @@ export type StockLevelInput = z.infer<typeof stockLevelSchema>;
 export type PlanInput = z.infer<typeof planSchema>;
 export type ProductInput = z.infer<typeof productSchema>;
 export type PricelistRuleInput = z.infer<typeof pricelistRuleSchema>;
+export type ProductPlanPriceInput = z.infer<typeof productPlanPriceSchema>;
 export type UserRoleInput = z.infer<typeof userRoleSchema>;

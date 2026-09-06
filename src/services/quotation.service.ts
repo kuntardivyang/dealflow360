@@ -130,7 +130,7 @@ export async function addLine(input: AddLineInput, user: SessionUser): Promise<Q
     const q = await loadForEdit(tx, input.quotationId, input.version, user);
     const product = await tx.product.findFirst({
       where: { id: input.productId, archivedAt: null },
-      include: { category: true, plans: { where: { archivedAt: null }, orderBy: { id: "asc" } } },
+      include: { category: true, plans: { where: { archivedAt: null }, orderBy: { id: "asc" } }, planPrices: true },
     });
     if (!product) throw new NotFoundError("Product not found");
     if (!Number.isInteger(input.qty) || input.qty < 1) throw new ValidationError("Quantity must be a whole number of at least 1", { qty: ["At least 1"] });
@@ -148,7 +148,11 @@ export async function addLine(input: AddLineInput, user: SessionUser): Promise<Q
     if (!q.customer) throw new ValidationError("Pick a customer first: prices and discount limits depend on the customer's tier", { customerId: ["Required"] });
     const tier = q.customer.tier;
     const rule = await bestPricelistRule(tx, tier.id, product.categoryId, product.id);
-    const unitPrice = rule ? applyDiscount(product.listPrice, rule.discountBp) : product.listPrice;
+    // Time-based pricing: a recurring line is priced from the product's row for the chosen
+    // plan (monthly, six-monthly, yearly...), falling back to the list price when it has none.
+    const planPrice = planId === null ? undefined : product.planPrices.find((pp) => pp.planId === planId);
+    const basePrice = planPrice?.price ?? product.listPrice;
+    const unitPrice = rule ? applyDiscount(basePrice, rule.discountBp) : basePrice;
     const ceilingBp =
       product.category.discountCeilingBp === null ? tier.discountCeilingBp : Math.min(tier.discountCeilingBp, product.category.discountCeilingBp);
 

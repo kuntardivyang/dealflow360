@@ -12,6 +12,7 @@ import {
   parseInput,
   planSchema,
   pricelistRuleSchema,
+  productPlanPriceSchema,
   productSchema,
   riskConfigSchema,
   stockLevelSchema,
@@ -78,6 +79,10 @@ export async function saveProduct(input: unknown) {
 export async function savePricelistRule(input: unknown) {
   return run(pricelistRuleSchema, input, admin.savePricelistRule, PRODUCTS);
 }
+export async function saveProductPlanPrice(input: unknown) {
+  return run(productPlanPriceSchema, input, admin.saveProductPlanPrice, [...PRODUCTS, "/quotes"]);
+}
+
 export async function setUserRole(input: unknown) {
   return run(userRoleSchema, input, admin.setUserRole, ["/admin/users", "/admin"], ["ADMIN"]);
 }
