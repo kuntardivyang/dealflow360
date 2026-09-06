@@ -353,6 +353,7 @@ model Product {
   parent         Product?         @relation("ProductVariant", fields: [parentId], references: [id])
   variants       Product[]        @relation("ProductVariant")
   pricelistRules PricelistRule[]
+  planPrices     ProductPlanPrice[]
   pairings       ProductPairing[] @relation("PairingFrom")
   pairedWith     ProductPairing[] @relation("PairingTo")
   plans          RecurringPlan[]
@@ -737,6 +738,25 @@ model FulfillmentPrompt {
 // Subscriptions and billing
 // ---------------------------------------------------------------------------
 
+/**
+ * Odoo's time-based pricing: one row per (product, plan) with the price for that period,
+ * so a single product is sold monthly, six-monthly and yearly without duplicating the SKU.
+ * A product with no row for the chosen plan falls back to its list price.
+ */
+model ProductPlanPrice {
+  id        Int      @id @default(autoincrement())
+  productId Int      @map("product_id")
+  planId    Int      @map("plan_id")
+  price     Int // paise per period
+  createdAt DateTime @default(now()) @map("created_at")
+
+  product Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  plan    RecurringPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, planId])
+  @@map("product_plan_price")
+}
+
 model RecurringPlan {
   id            Int             @id @default(autoincrement())
   name          String          @unique
@@ -750,7 +770,8 @@ model RecurringPlan {
   archivedAt    DateTime?       @map("archived_at")
   createdAt     DateTime        @default(now()) @map("created_at")
 
-  product        Product?        @relation(fields: [productId], references: [id])
+  product        Product?           @relation(fields: [productId], references: [id])
+  planPrices     ProductPlanPrice[]
   quotationLines QuotationLine[]
   subscriptions  Subscription[]
 

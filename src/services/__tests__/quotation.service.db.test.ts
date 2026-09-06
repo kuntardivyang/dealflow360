@@ -189,3 +189,32 @@ describe("confirm and approval rounds", () => {
     await expect(svc.confirmQuotation({ quotationId: ref.id, version: ref.version }, riya)).rejects.toBeInstanceOf(ValidationError);
   });
 });
+
+describe("time-based pricing", () => {
+  it("prices a recurring line from the product's row for the chosen plan, and falls back to the list price", async () => {
+    const riya = await userByEmail("riya@test.com");
+    const beta = await customer("Beta Industries");
+    const ref = await svc.createQuotation({ customerId: beta.id }, riya);
+    created.push(ref.id);
+    const pro = await product("Support Pro");
+    const yearly = await prisma.recurringPlan.findFirstOrThrow({ where: { interval: "YEAR" } });
+    const monthly = await prisma.recurringPlan.findFirstOrThrow({ where: { interval: "MONTH" } });
+
+    // One product, three cycles: the yearly row is 10,000 a period, not the 1,000 list price.
+    let view = await svc.addLine({ quotationId: ref.id, version: ref.version, productId: pro.id, planId: yearly.id, qty: 1, discountBp: 0, source: "MANUAL" }, riya);
+    const yearLine = await prisma.quotationLine.findFirstOrThrow({ where: { quotationId: ref.id, planId: yearly.id } });
+    expect(yearLine.unitPrice).toBe(10000_00);
+    expect(yearLine.lineType).toBe("RECURRING");
+
+    view = await svc.addLine({ quotationId: ref.id, version: view.version, productId: pro.id, planId: monthly.id, qty: 1, discountBp: 0, source: "MANUAL" }, riya);
+    const monthLine = await prisma.quotationLine.findFirstOrThrow({ where: { quotationId: ref.id, planId: monthly.id } });
+    expect(monthLine.unitPrice).toBe(1000_00);
+    expect(monthLine.id).not.toBe(yearLine.id); // same product, different plan, separate lines
+
+    // Support Basic has no plan-price rows, so it still uses its list price.
+    const basic = await product("Support Basic");
+    await svc.addLine({ quotationId: ref.id, version: view.version, productId: basic.id, qty: 1, discountBp: 0, source: "MANUAL" }, riya);
+    const basicLine = await prisma.quotationLine.findFirstOrThrow({ where: { quotationId: ref.id, productId: basic.id } });
+    expect(basicLine.unitPrice).toBe(basic.listPrice);
+  });
+});

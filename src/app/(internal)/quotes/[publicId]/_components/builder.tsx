@@ -31,7 +31,18 @@ export type BuilderLine = {
   ceilingBp: number;
   total: number;
 };
-export type PickerProduct = { id: number; name: string; category: string; kind: string; listPrice: number; unit: string; isPromoted: boolean; recurring: string | null };
+export type PickerProduct = {
+  id: number;
+  name: string;
+  category: string;
+  kind: string;
+  listPrice: number;
+  unit: string;
+  isPromoted: boolean;
+  recurring: string | null;
+  /** Time-based pricing: the plans this product is sold on, each with its own per-period price. */
+  planPrices: { planId: number; planName: string; price: number }[];
+};
 export type BuilderView = { totals: Totals; risk: RiskPreview | null; version: number };
 export type UpsellSuggestion = { productId: number; name: string; category: string; listPrice: number; unit: string; marginDelta: number; isPromoted: boolean; reason: string };
 
@@ -277,9 +288,26 @@ export function Builder({
                       {p.recurring ? ` · ${p.recurring}` : ""}
                     </p>
                   </div>
-                  <Button size="sm" variant="outline" disabled={pending} onClick={() => run(addLine({ quotationId, version: view.version, productId: p.id, qty: 1, discountBp: 0, source: "MANUAL" }))}>
-                    <Plus /> Add
-                  </Button>
+                  {p.planPrices.length > 0 ? (
+                    <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                      {p.planPrices.map((pp) => (
+                        <Button
+                          key={pp.planId}
+                          size="sm"
+                          variant="outline"
+                          disabled={pending}
+                          title={`Add on the ${pp.planName} plan`}
+                          onClick={() => run(addLine({ quotationId, version: view.version, productId: p.id, planId: pp.planId, qty: 1, discountBp: 0, source: "MANUAL" }))}
+                        >
+                          <Plus /> {pp.planName} <Money paise={pp.price} className="ml-1 text-xs" />
+                        </Button>
+                      ))}
+                    </div>
+                  ) : (
+                    <Button size="sm" variant="outline" disabled={pending} onClick={() => run(addLine({ quotationId, version: view.version, productId: p.id, qty: 1, discountBp: 0, source: "MANUAL" }))}>
+                      <Plus /> Add
+                    </Button>
+                  )}
                 </li>
               ))}
             </ul>
