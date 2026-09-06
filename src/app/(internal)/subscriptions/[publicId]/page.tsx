@@ -11,7 +11,8 @@ import { OPS_ROLES } from "@/lib/contract";
 import { prisma } from "@/lib/db";
 import { todayISO, toISODate } from "@/domain/dates";
 import { formatDate } from "@/lib/format";
-import { cancelSubscriptionForm, changeQuantityForm } from "../../actions/subscription";
+import { cancelSubscriptionForm, changeQuantityForm, startRenewalForm, startUpsellForm } from "../../actions/subscription";
+import { renewalStartFor } from "@/services/subscription.service";
 
 export const dynamic = "force-dynamic";
 const CYCLE = { WEEK: "Weekly", MONTH: "Monthly", QUARTER: "Quarterly", YEAR: "Yearly" } as const;
@@ -30,9 +31,16 @@ export default async function BillingDetailPage({ params, searchParams }: { para
       invoices: { orderBy: { issueDate: "asc" } },
       changes: { orderBy: { createdAt: "desc" } },
       quotation: { include: { lines: { where: { lineType: "ONE_TIME" }, orderBy: { sortOrder: "asc" } }, invoices: { where: { kind: "ONE_TIME" } } } },
+      renewedFrom: { select: { publicId: true, currentPeriodStart: true, currentPeriodEnd: true } },
+      renewedBy: { select: { publicId: true, currentPeriodStart: true, currentPeriodEnd: true } },
+      orders: { orderBy: { createdAt: "desc" }, select: { publicId: true, number: true, status: true, subscriptionIntent: true, total: true, createdAt: true } },
     },
   });
   if (!sub) notFound();
+  // Odoo 19 shows Upsell and Renew on a running subscription; both open a quotation.
+  const canOpenOrder = sub.status === "ACTIVE";
+  const isInvoiced = sub.invoices.length > 0;
+  const nextTermStart = renewalStartFor(sub);
   const next = sub.schedule.find((s) => s.status === "SCHEDULED");
   // The next unbilled period, not schedule[0]: period one is already INVOICED, and a
   // quantity change reprices only SCHEDULED rows (subscription.service.ts:94), so
@@ -50,6 +58,24 @@ export default async function BillingDetailPage({ params, searchParams }: { para
         actions={
           <>
             <StatusBadge status={sub.status} className="h-6 px-3 text-sm" />
+            {canOpenOrder ? (
+              <form action={startUpsellForm}>
+                <input type="hidden" name="subscriptionId" value={sub.id} />
+                <input type="hidden" name="publicId" value={sub.publicId} />
+                <Button type="submit" variant="outline" disabled={!isInvoiced} title={isInvoiced ? "Open an upsell quotation for this subscription" : "Invoice the subscription before upselling it"}>
+                  Upsell
+                </Button>
+              </form>
+            ) : null}
+            {canOpenOrder ? (
+              <form action={startRenewalForm}>
+                <input type="hidden" name="subscriptionId" value={sub.id} />
+                <input type="hidden" name="publicId" value={sub.publicId} />
+                <Button type="submit" variant="outline" title={`Open a renewal quotation for the term starting ${nextTermStart}`}>
+                  Renew
+                </Button>
+              </form>
+            ) : null}
             {canChange && sub.status === "ACTIVE" ? (
               <a href="#cancel" className="text-sm text-muted-foreground underline-offset-4 hover:underline">
                 Cancel Subscription
@@ -61,6 +87,68 @@ export default async function BillingDetailPage({ params, searchParams }: { para
 
       {sp.error ? <p className="rounded-lg bg-destructive/8 px-3 py-2 text-sm text-destructive ring-1 ring-inset ring-destructive/20">{sp.error}</p> : null}
       {sp.ok ? <p className="rounded-lg bg-success/8 px-3 py-2 text-sm text-success ring-1 ring-inset ring-success/20">{sp.ok}</p> : null}
+
+      {sub.renewedFrom || sub.renewedBy || sub.status === "RENEWED" ? (
+        <Card className="border-l-4 border-l-link">
+          <CardContent className="space-y-1 p-4 text-sm">
+            {sub.renewedFrom ? (
+              <p>
+                Renewed from{" "}
+                <Link href={`/subscriptions/${sub.renewedFrom.publicId}`} className="text-link underline-offset-4 hover:underline">
+                  the previous term
+                </Link>{" "}
+                ({formatDate(sub.renewedFrom.currentPeriodStart)} to {formatDate(sub.renewedFrom.currentPeriodEnd)}).
+              </p>
+            ) : null}
+            {sub.renewedBy ? (
+              <p>
+                Renewed by{" "}
+                <Link href={`/subscriptions/${sub.renewedBy.publicId}`} className="text-link underline-offset-4 hover:underline">
+                  the next term
+                </Link>{" "}
+                starting {formatDate(sub.renewedBy.currentPeriodStart)}. This subscription is history.
+              </p>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {sub.orders.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Sales history</CardTitle>
+          </CardHeader>
+          <CardContent className="px-0">
+            <table className="w-full text-sm">
+              <thead className="col-label border-b border-foreground/10 text-left [&_th]:px-4 [&_th]:pb-2">
+                <tr>
+                  <th>Order</th>
+                  <th>Raised as</th>
+                  <th>Status</th>
+                  <th className="text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y [&_td]:px-4 [&_td]:py-2">
+                {sub.orders.map((o) => (
+                  <tr key={o.publicId}>
+                    <td>
+                      <Link href={`/quotes/${o.publicId}`} className="font-medium text-link underline-offset-4 hover:underline">
+                        {o.number}
+                      </Link>
+                    </td>
+                    <td>{o.subscriptionIntent === "UPSELL" ? "Upsell" : "Renewal"}</td>
+                    <td><StatusBadge status={o.status} /></td>
+                    <td className="text-right"><Money paise={o.total} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="px-4 pt-3 text-xs text-muted-foreground">
+              Upsell and renewal orders are ordinary quotations: they are priced from the customer&apos;s tier, scored for risk and routed for approval before they take effect.
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {canChange && sub.status === "ACTIVE" ? (
         <Card>

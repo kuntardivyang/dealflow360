@@ -8,7 +8,8 @@ import { audit } from "@/lib/audit";
 import { ConflictError, NotFoundError, actorFromUser, type Actor, type RecordPaymentInput, type SessionUser } from "@/lib/contract";
 import { prisma, type Tx } from "@/lib/db";
 import { publicId } from "@/lib/ids";
-import { applyPayment, assertActor, assertTransition } from "@/lib/state";
+import { applyPayment, assertActor, assertSubscriptionTransition, assertTransition } from "@/lib/state";
+import { applyQuantityChange, renewalStartFor } from "./subscription.service";
 import { nextNumber } from "./support";
 
 const DUE_DAYS = 15;
@@ -19,7 +20,13 @@ const DUE_DAYS = 15;
  * (plan.periods rows) + Invoice(RECURRING) for period one, posted immediately.
  */
 export async function onConfirmed(tx: Tx, quotationId: number, actor: Actor): Promise<{ invoicesCreated: number; subscriptionsCreated: number }> {
-  const q = await tx.quotation.findUniqueOrThrow({ where: { id: quotationId }, include: { lines: { orderBy: { sortOrder: "asc" }, include: { plan: true, product: true } } } });
+  const q = await tx.quotation.findUniqueOrThrow({
+    where: { id: quotationId },
+    include: {
+      lines: { orderBy: { sortOrder: "asc" }, include: { plan: true, product: true } },
+      subscription: { include: { plan: true, product: true, schedule: true } },
+    },
+  });
   const today = todayISO();
   const issue = parseISODate(today);
   const due = parseISODate(addDays(today, DUE_DAYS));
@@ -62,8 +69,33 @@ export async function onConfirmed(tx: Tx, quotationId: number, actor: Actor): Pr
     numbers.push(number);
   }
 
+  // Odoo 19: an upsell order folds its line into the subscription it came from, prorated
+  // for the days left in the current period; a renewal order starts a successor
+  // subscription at the end of the current term and retires the parent as RENEWED.
+  const parent = q.subscription;
+  let renewed = false;
+
   for (const line of q.lines.filter((l) => l.lineType === "RECURRING")) {
     if (!line.plan) throw new ConflictError(`Recurring line ${line.description} has no plan`);
+
+    if (parent && q.subscriptionIntent === "UPSELL" && line.productId === parent.productId) {
+      if (line.qty !== parent.qty) {
+        const change = await applyQuantityChange(tx, parent, line.qty, today, actor, actor.type === "USER" ? actor.id : null, `Upsell order ${q.number}`);
+        if (change.invoiceId) {
+          invoicesCreated += 1;
+          if (change.invoiceNumber) numbers.push(change.invoiceNumber);
+        }
+      }
+      continue;
+    }
+
+    if (parent && q.subscriptionIntent === "RENEWAL" && line.productId === parent.productId && !renewed) {
+      renewed = true;
+      invoicesCreated += await renewSubscription(tx, q, line, parent, actor, numbers);
+      subscriptionsCreated += 1;
+      continue;
+    }
+
     const schedule = buildSchedule(today, line.plan.interval, line.plan.periods, line.net, line.taxBp);
     const subscription = await tx.subscription.create({
       data: {
@@ -139,6 +171,107 @@ export async function onConfirmed(tx: Tx, quotationId: number, actor: Actor): Pr
     await audit(tx, { entityType: "Quotation", entityId: q.id, quotationId: q.id, action: "INVOICES_CREATED", actor, after: { invoices: numbers, subscriptions: subscriptionsCreated } });
   }
   return { invoicesCreated, subscriptionsCreated };
+}
+
+
+/**
+ * A confirmed renewal order: the successor subscription starts the day after the term
+ * already scheduled, the parent retires as RENEWED, and the first period of the new term
+ * is invoiced straight away (Odoo: confirm the quotation, invoice the order, take payment).
+ * Returns how many invoices it created.
+ */
+async function renewSubscription(
+  tx: Tx,
+  q: { id: number; number: string; customerId: number | null },
+  line: { id: number; productId: number; planId: number | null; qty: number; unitPrice: number; effectiveDiscountBp: number; taxBp: number; net: number; description: string; plan: { interval: "WEEK" | "MONTH" | "QUARTER" | "YEAR"; periods: number; name: string } | null },
+  parent: { id: number; publicId: string; status: "ACTIVE" | "PAUSED" | "CANCELLED" | "RENEWED"; currentPeriodEnd: Date; schedule: { periodEnd: Date }[] },
+  actor: Actor,
+  numbers: string[],
+): Promise<number> {
+  assertSubscriptionTransition(parent.status, "RENEWED");
+  const start = renewalStartFor(parent);
+  const plan = line.plan!;
+  const schedule = buildSchedule(start, plan.interval, plan.periods, line.net, line.taxBp);
+  const successor = await tx.subscription.create({
+    data: {
+      publicId: publicId(),
+      customerId: q.customerId!,
+      quotationId: q.id,
+      quotationLineId: line.id,
+      productId: line.productId,
+      planId: line.planId!,
+      qty: line.qty,
+      unitPrice: line.unitPrice,
+      discountBp: line.effectiveDiscountBp,
+      taxBp: line.taxBp,
+      status: "ACTIVE",
+      anchorDate: parseISODate(start),
+      currentPeriodStart: parseISODate(start),
+      currentPeriodEnd: parseISODate(periodEnd(start, plan.interval)),
+      renewedFromId: parent.id,
+      schedule: {
+        create: schedule.map((p) => ({
+          periodStart: parseISODate(p.periodStart),
+          periodEnd: parseISODate(p.periodEnd),
+          billDate: parseISODate(p.billDate),
+          net: p.net,
+          tax: p.tax,
+          total: p.total,
+        })),
+      },
+    },
+    include: { schedule: { orderBy: { periodStart: "asc" } } },
+  });
+  await tx.subscription.update({ where: { id: parent.id }, data: { status: "RENEWED" } });
+
+  const today = todayISO();
+  const first = successor.schedule[0];
+  const number = await nextNumber(tx, "invoice", "INV");
+  const invoice = await tx.invoice.create({
+    data: {
+      publicId: publicId(),
+      number,
+      kind: "RECURRING",
+      customerId: q.customerId!,
+      quotationId: q.id,
+      subscriptionId: successor.id,
+      subtotal: first.net,
+      taxTotal: first.tax,
+      total: first.total,
+      issueDate: parseISODate(today),
+      dueDate: parseISODate(addDays(today, DUE_DAYS)),
+      periodStart: first.periodStart,
+      periodEnd: first.periodEnd,
+      lines: {
+        create: [
+          {
+            quotationLineId: line.id,
+            description: `${line.description} · ${plan.name} · renewal ${schedule[0].periodStart} to ${schedule[0].periodEnd}`,
+            qty: line.qty,
+            unitPrice: line.unitPrice,
+            discountBp: line.effectiveDiscountBp,
+            net: first.net,
+            taxBp: line.taxBp,
+            tax: first.tax,
+            total: first.total,
+            sortOrder: 1,
+          },
+        ],
+      },
+    },
+  });
+  await tx.billingSchedule.update({ where: { id: first.id }, data: { status: "INVOICED", invoiceId: invoice.id } });
+  numbers.push(number);
+  await audit(tx, {
+    entityType: "Subscription",
+    entityId: successor.id,
+    quotationId: q.id,
+    action: "SUBSCRIPTION_RENEWED",
+    actor,
+    before: { subscription: parent.publicId, status: parent.status },
+    after: { successor: successor.publicId, order: q.number, termStart: start, periods: plan.periods, invoice: number },
+  });
+  return 1;
 }
 
 /**

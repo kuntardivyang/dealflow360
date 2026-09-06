@@ -45,6 +45,7 @@ export default async function QuotationDetailPage({
       customer: { include: { tier: true } },
       rep: true,
       lines: { orderBy: { sortOrder: "asc" }, include: { product: { include: { category: true } }, plan: true } },
+      subscription: { select: { publicId: true, qty: true, product: { select: { name: true } } } },
       approvalRequests: { orderBy: { version: "desc" }, take: 1, include: { steps: { orderBy: { stepNo: "asc" }, include: { actedBy: true } } } },
       portalRequests: { orderBy: { createdAt: "desc" }, include: { line: { select: { description: true } }, contact: { select: { name: true } } } },
     },
