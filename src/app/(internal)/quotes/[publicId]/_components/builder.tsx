@@ -278,18 +278,27 @@ export function Builder({
             </div>
             <ul className="grid gap-2 sm:grid-cols-2">
               {visible.map((p) => (
-                <li key={p.id} className="flex items-center justify-between gap-3 rounded-lg border bg-card px-3 py-2 transition-colors hover:border-foreground/20">
+                <li key={p.id} className="rounded-lg border bg-card px-3 py-2 transition-colors hover:border-foreground/20">
+                  <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium">
                       {p.name} {p.isPromoted ? <StatusBadge status="PROMO" label="Promo" className="ml-1" /> : null}
                     </p>
-                    <p className="text-xs text-muted-foreground">
-                      <Money paise={p.listPrice} /> · {p.unit}
+                    <p className="truncate text-xs text-muted-foreground">
+                      {/* With per-plan prices the buttons below carry the real figures, so the list price would only mislead. */}
+                      {p.planPrices.length > 0 ? p.unit : <><Money paise={p.listPrice} /> · {p.unit}</>}
                       {p.recurring ? ` · ${p.recurring}` : ""}
                     </p>
                   </div>
+                  {p.planPrices.length > 0 ? null : (
+                    <Button size="sm" variant="outline" disabled={pending} onClick={() => run(addLine({ quotationId, version: view.version, productId: p.id, qty: 1, discountBp: 0, source: "MANUAL" }))}>
+                      <Plus /> Add
+                    </Button>
+                  )}
+                  </div>
                   {p.planPrices.length > 0 ? (
-                    <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                    // One button per cycle, on their own row so a narrow card never squeezes the name.
+                    <div className="mt-2 flex flex-wrap gap-1.5">
                       {p.planPrices.map((pp) => (
                         <Button
                           key={pp.planId}
@@ -303,11 +312,7 @@ export function Builder({
                         </Button>
                       ))}
                     </div>
-                  ) : (
-                    <Button size="sm" variant="outline" disabled={pending} onClick={() => run(addLine({ quotationId, version: view.version, productId: p.id, qty: 1, discountBp: 0, source: "MANUAL" }))}>
-                      <Plus /> Add
-                    </Button>
-                  )}
+                  ) : null}
                 </li>
               ))}
             </ul>
