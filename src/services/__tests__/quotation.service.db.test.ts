@@ -123,7 +123,7 @@ describe("quotation service against the database", () => {
       data: { sku: `SB-WEEKLY-${ref.id}`, name: `Weekly Backup ${ref.id}`, kind: "SERVICE", isSubscription: true, recurringInterval: "WEEK", categoryId: supportPro.categoryId, listPrice: 200_00, cost: 50_00 },
     });
     try {
-      view = await svc.addLine({ quotationId: ref.id, version: view.version, productId: weekly.id, qty: 1, discountBp: 0, source: "MANUAL" }, riya);
+      await svc.addLine({ quotationId: ref.id, version: view.version, productId: weekly.id, qty: 1, discountBp: 0, source: "MANUAL" }, riya);
       const weeklyLine = await prisma.quotationLine.findFirstOrThrow({ where: { quotationId: ref.id, productId: weekly.id }, include: { plan: true } });
       expect(weeklyLine.lineType).toBe("RECURRING");
       expect(weeklyLine.plan).toMatchObject({ interval: "WEEK", productId: null, periods: 52 });

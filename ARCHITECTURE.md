@@ -199,6 +199,8 @@ erDiagram
     int approvalVersion
     int version
     boolean negotiationPending
+    int subscriptionId FK
+    enum subscriptionIntent
     datetime promisedDate
     string notes
     datetime sentAt
@@ -374,6 +376,7 @@ erDiagram
     datetime currentPeriodEnd
     datetime cancelledAt
     datetime cancelEffective
+    int renewedFromId UK
     datetime createdAt
     datetime updatedAt
   }
@@ -509,6 +512,7 @@ erDiagram
   product ||--o{ product_pairing : "pairedProductId"
   customer o|--o{ quotation : "customerId"
   app_user ||--o{ quotation : "repUserId"
+  subscription o|--o{ quotation : "subscriptionId"
   quotation ||--o{ quotation_line : "quotationId"
   product ||--o{ quotation_line : "productId"
   recurring_plan o|--o{ quotation_line : "planId"
@@ -533,6 +537,7 @@ erDiagram
   quotation_line o|--o{ subscription : "quotationLineId"
   product ||--o{ subscription : "productId"
   recurring_plan ||--o{ subscription : "planId"
+  subscription o|--o{ subscription : "renewedFromId"
   subscription ||--o{ billing_schedule : "subscriptionId"
   invoice o|--o{ billing_schedule : "invoiceId"
   subscription ||--o{ subscription_change : "subscriptionId"

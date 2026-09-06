@@ -40,9 +40,10 @@ export default async function SubscriptionsPage() {
           ) : null
         }
       />
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-4">
         <StatTile label="Active" value={String(count("ACTIVE"))} />
         <StatTile label="Paused" value={String(count("PAUSED"))} />
+        <StatTile label="Renewed" value={String(count("RENEWED"))} caption="superseded by a next term" />
         <StatTile label="Cancelled" value={String(count("CANCELLED"))} />
       </div>
       <DataTable columns={columns} rows={subs} rowKey={(s) => s.id} rowHref={(s) => `/subscriptions/${s.publicId}`} empty={<EmptyState title="No subscriptions yet" description="A confirmed order with a recurring line starts one." />} />

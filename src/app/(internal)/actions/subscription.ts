@@ -3,7 +3,7 @@
 // Owner: A. Subscription changes from the billing detail screen.
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { cancelSubscriptionSchema, changeQuantitySchema, errorQuery, ok, parseInput, toActionError, type ActionResult } from "@/lib/contract";
+import { cancelSubscriptionSchema, changeQuantitySchema, errorQuery, ok, parseInput, startRenewalSchema, startUpsellSchema, toActionError, type ActionResult } from "@/lib/contract";
 import { requireActionUser } from "@/lib/auth/internal";
 import * as subscriptions from "@/services/subscription.service";
 
@@ -50,4 +50,46 @@ export async function cancelSubscriptionForm(formData: FormData): Promise<void> 
     ? `Cancelled (${r.data.policy.toLowerCase().replaceAll("_", " ")}), credit note issued for the unused days`
     : `Cancelled, effective ${r.data.cancelEffective}`;
   redirect(`/subscriptions/${publicId}?ok=${encodeURIComponent(msg)}`);
+}
+
+// Odoo 19: Upsell and Renew open a quotation on the running subscription, so the change
+// is priced, scored and routed for approval like any other deal before it takes effect.
+
+export async function startUpsell(input: unknown): Promise<ActionResult<Awaited<ReturnType<typeof subscriptions.startUpsell>>>> {
+  const p = parseInput(startUpsellSchema, input);
+  if (!p.ok) return p;
+  try {
+    const r = await subscriptions.startUpsell(p.data, await requireActionUser());
+    for (const path of ["/subscriptions", "/quotes"]) revalidatePath(path);
+    return ok(r);
+  } catch (e) {
+    return toActionError(e);
+  }
+}
+
+export async function startRenewal(input: unknown): Promise<ActionResult<Awaited<ReturnType<typeof subscriptions.startRenewal>>>> {
+  const p = parseInput(startRenewalSchema, input);
+  if (!p.ok) return p;
+  try {
+    const r = await subscriptions.startRenewal(p.data, await requireActionUser());
+    for (const path of ["/subscriptions", "/quotes"]) revalidatePath(path);
+    return ok(r);
+  } catch (e) {
+    return toActionError(e);
+  }
+}
+
+/** Both buttons land the rep on the new draft quotation. */
+export async function startUpsellForm(formData: FormData): Promise<void> {
+  const publicId = String(formData.get("publicId") ?? "");
+  const r = await startUpsell({ subscriptionId: formData.get("subscriptionId") });
+  if (!r.ok) redirect(`/subscriptions/${publicId}${errorQuery(r)}`);
+  redirect(`/quotes/${r.data.publicId}`);
+}
+
+export async function startRenewalForm(formData: FormData): Promise<void> {
+  const publicId = String(formData.get("publicId") ?? "");
+  const r = await startRenewal({ subscriptionId: formData.get("subscriptionId") });
+  if (!r.ok) redirect(`/subscriptions/${publicId}${errorQuery(r)}`);
+  redirect(`/quotes/${r.data.publicId}`);
 }

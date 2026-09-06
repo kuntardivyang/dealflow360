@@ -11,6 +11,7 @@ Kept current after every reviewer visit. What is stubbed, partial or fragile, wi
 - **Multi-currency and multi-company** (PDF bonus): not started. Money is INR paise everywhere; `currency` columns hold the constant `INR`.
 - **PDF export** is the browser print dialog on a print stylesheet (navigation and filters hidden), not a PDF library. XLS export is real (SheetJS).
 - **Deal health recompute** happens on every dashboard load and on "Recompute now"; there is no background timer.
+- **Subscription upsell and renewal** (Odoo 19 parity): both buttons on the billing detail screen open a quotation against the running subscription, so the change is priced from the customer's tier, risk scored and routed for approval like any other deal. Confirming an upsell folds the new quantity into the same subscription and posts a proration invoice; confirming a renewal starts a successor subscription the day after the scheduled term ends and retires the parent as *Renewed*. Gaps against Odoo: an upsell line for a *different* product still opens its own subscription rather than joining the parent; Odoo prorates only Service products while we prorate any folded line; the renewal is invoiced on confirmation even though its term starts later; there is no "Create Alternative" upsell quotation and no customer self-service renewal from the portal.
 
 ## Behaviour worth knowing
 
