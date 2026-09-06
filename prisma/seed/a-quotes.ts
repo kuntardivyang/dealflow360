@@ -21,6 +21,7 @@ type LineSpec = {
     taxBp: number;
     name: string;
     kind: string;
+    isSubscription: boolean;
   };
   qty: number;
   discountBp: number;
@@ -79,7 +80,7 @@ export async function seedQuotes(
       data: {
         productId: l.product.id,
         planId: l.planId ?? null,
-        lineType: (l.product.kind === "SUBSCRIPTION"
+        lineType: (l.product.isSubscription
           ? "RECURRING"
           : "ONE_TIME") as "RECURRING" | "ONE_TIME",
         description: l.product.name,
